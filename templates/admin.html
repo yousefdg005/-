@@ -47,17 +47,21 @@
         </form>
     </div>
 </div>
-<!-- إضافة مصطلح يدوي -->
+
+<!-- ➕ إضافة مصطلح يدوي بأعمدة الهيكل الجديد -->
 <div class="card mb-5 shadow-sm border-0 rounded-3" style="border-left: 4px solid #2ecc71;">
     <div class="card-body p-4">
         <h5 class="text-success mb-3 fw-bold">➕ Add New Term Manually</h5>
         <form method="POST" action="{{ url_for('admin_dashboard') }}">
             <div class="row g-3">
                 <div class="col-md-3">
-                    <input type="text" name="word" class="form-control bg-light" placeholder="Term (Word)" required>
+                    <input type="text" name="english_term" class="form-control bg-light" placeholder="English Term" required>
                 </div>
-                <div class="col-md-7">
-                    <input type="text" name="definition" class="form-control bg-light" placeholder="Definition" required>
+                <div class="col-md-3">
+                    <input type="text" name="arabic_term" class="form-control bg-light" placeholder="Arabic Term">
+                </div>
+                <div class="col-md-4">
+                    <input type="text" name="arabic_description" class="form-control bg-light" placeholder="Arabic Description">
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-success w-100 btn-custom">Add Term</button>
@@ -67,10 +71,10 @@
     </div>
 </div>
 
-<!-- جدول مراجعة المصطلحات الواصلة والمعلقة -->
+<!-- 📋 جدول مراجعة المصطلحات الواصلة والمعلقة -->
 <h4 class="mb-3 fw-bold">📋 Extracted Pending Terms Queue</h4>
 <div class="table-responsive bg-white shadow-sm rounded-3 mb-5 border">
-<table class="table">
+<table class="table align-middle">
     <thead>
         <tr>
             <th>ID</th>
@@ -86,18 +90,21 @@
         {% for term in pending_terms %}
         <tr>
             <td>{{ term.id }}</td>
-            <td>{{ term.english_term }}</td>
-            <td>{{ term.arabic_term }}</td>
-            <td>{{ term.arabic_description }}</td>
-            <td>{{ term.date.strftime('%Y-%m-%d %H:%M') if term.date else '' }}</td>
-            <td><span class="badge bg-warning">{{ term.status }}</span></td>
+            <td class="fw-bold">{{ term.english_term }}</td>
+            <td>{{ term.arabic_term or '-' }}</td>
+            <td>{{ term.arabic_description or '-' }}</td>
+            <td><small class="text-muted">{{ term.date.strftime('%Y-%m-%d %H:%M') if term.date else '-' }}</small></td>
+            <td><span class="badge bg-warning text-dark">{{ term.status }}</span></td>
             <td>
-                <!-- أزرار القبول والحذف -->
+                <div class="btn-group btn-group-sm">
+                    <a href="{{ url_for('approve_term', term_id=term.id) }}" class="btn btn-outline-success">Approve</a>
+                    <a href="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-outline-danger" onclick="return confirm('Are you sure?');">Delete</a>
+                </div>
             </td>
         </tr>
         {% else %}
         <tr>
-            <td colspan="7" class="text-center">No pending terms to review.</td>
+            <td colspan="7" class="text-center py-4 text-muted">No pending terms to review.</td>
         </tr>
         {% endfor %}
     </tbody>
