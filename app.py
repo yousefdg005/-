@@ -155,7 +155,7 @@ def admin_dashboard():
         flash('Term added manually and is pending review.', 'success')
         return redirect(url_for('admin_dashboard'))
         
-    pending_terms = Term.query.filter(Term.status.in_(['pending', 'ai_suggested'])).order_by(Term.created_at.desc()).all()
+    pending_terms = Term.query.filter(Term.status.in_(['pending', 'ai_suggested'])).order_by(Term.date.desc()).all()
     approved_terms = Term.query.filter_by(status='approved').all()
     
     # إحصائيات وإشعارات المصطلحات
