@@ -1,0 +1,48 @@
+@import url('[https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap](https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap)');
+
+body {
+    font-family: 'Tajawal', sans-serif;
+    background-color: #f4f7f6;
+    color: #333;
+}
+
+.navbar {
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    background-color: #1a252f !important;
+}
+
+.term-card {
+    border: none;
+    border-radius: 12px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    background-color: #ffffff;
+    border-top: 4px solid #3498db;
+}
+
+.term-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.15) !important;
+}
+
+.term-word {
+    color: #2c3e50;
+    font-weight: 700;
+}
+
+.term-category {
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+}
+
+.btn-custom {
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f1f2f6;
+}
+
+.alert-dismissible {
+    border-radius: 8px;
+}

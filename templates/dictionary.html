@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+    <h2 class="text-primary fw-bold mb-3 mb-md-0">Dictionary Archive</h2>
+    <input type="text" id="searchInput" class="form-control w-100 w-md-25" placeholder="🔍 Search terms or definitions...">
+</div>
+<hr>
+
+<div class="row" id="dictionaryList">
+    {% for term in terms %}
+    <div class="col-md-4 mb-4 term-container">
+        <div class="card term-card shadow-sm h-100 p-3">
+            <div class="card-body p-0">
+                <h5 class="card-title term-word fs-4">{{ term.word }}</h5>
+                <div class="term-category"><span class="badge bg-secondary">{{ term.category }}</span></div>
+                <p class="card-text term-def text-muted mt-2">{{ term.definition }}</p>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12"><p class="text-muted text-center mt-5">No approved terms available yet.</p></div>
+    {% endfor %}
+</div>
+{% endblock %}
