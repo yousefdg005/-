@@ -71,42 +71,37 @@
 <!-- جدول مراجعة المصطلحات الواصلة والمعلقة -->
 <h4 class="mb-3 fw-bold">📋 Extracted Pending Terms Queue</h4>
 <div class="table-responsive bg-white shadow-sm rounded-3 mb-5 border">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-dark">
-            <tr>
-                <th width="20%">Word</th>
-                <th width="35%">Definition</th>
-                <th width="15%">Category</th>
-                <th width="10%">Status</th>
-                <th width="20%">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for term in pending_terms %}
-            <tr>
-                <form method="POST" action="{{ url_for('edit_term', term_id=term.id) }}">
-                    <td><input type="text" name="word" value="{{ term.word }}" class="form-control form-control-sm"></td>
-                    <td><textarea name="definition" class="form-control form-control-sm" rows="2">{{ term.definition }}</textarea></td>
-                    <td><input type="text" name="category" value="{{ term.category }}" class="form-control form-control-sm"></td>
-                    <td>
-                        <span class="badge {% if term.status == 'ai_suggested' %}bg-info text-dark{% else %}bg-warning text-dark{% endif %} w-100 py-2">
-                            {{ term.status | replace('_', ' ') | title }}
-                        </span>
-                    </td>
-                    <td>
-                        <button type="submit" class="btn btn-sm btn-primary mb-1 w-100">Save Edit</button>
-                        {% if term.status == 'pending' %}
-                            <a href="{{ url_for('process_ai', term_id=term.id) }}" class="btn btn-sm btn-dark mb-1 w-100">✨ Refine AI</a>
-                        {% endif %}
-                        <a href="{{ url_for('approve_term', term_id=term.id) }}" class="btn btn-sm btn-success mb-1 w-100">Approve</a>
-                        <a href="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger w-100" onclick="return confirmAction('Delete this term?');">Delete</a>
-                    </td>
-                </form>
-            </tr>
-            {% else %}
-            <tr><td colspan="5" class="text-center text-muted py-4">No pending terms to review.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>English Term</th>
+            <th>Arabic Term</th>
+            <th>Arabic Description</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for term in pending_terms %}
+        <tr>
+            <td>{{ term.id }}</td>
+            <td>{{ term.english_term }}</td>
+            <td>{{ term.arabic_term }}</td>
+            <td>{{ term.arabic_description }}</td>
+            <td>{{ term.date.strftime('%Y-%m-%d %H:%M') if term.date else '' }}</td>
+            <td><span class="badge bg-warning">{{ term.status }}</span></td>
+            <td>
+                <!-- أزرار القبول والحذف -->
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="7" class="text-center">No pending terms to review.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 </div>
 {% endblock %}

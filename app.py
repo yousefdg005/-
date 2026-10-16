@@ -36,12 +36,25 @@ class User(db.Model, UserMixin):
 
 class Term(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    word = db.Column(db.String(200), nullable=False)
-    definition = db.Column(db.Text, nullable=False)
-    category = db.Column(db.String(100), default='Uncategorized')
-    status = db.Column(db.String(20), default='pending') # pending, ai_suggested, approved
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    english_term = db.Column(db.String(255), nullable=False)
+    arabic_term = db.Column(db.String(255), nullable=True)
+    arabic_description = db.Column(db.Text, nullable=True)
+    date = db.Column(db.DateTime, default=db.func.now())
+    status = db.Column(db.String(50), default='pending')
 
+# تحديث هيكل قاعدة البيانات تلقائياً عند الإقلاع
+with app.app_context():
+    try:
+        from sqlalchemy import text
+        db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS english_term VARCHAR(255);"))
+        db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS arabic_term VARCHAR(255);"))
+        db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS arabic_description TEXT;"))
+        db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS date TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"))
+        db.session.commit()
+    except Exception as e:
+
+        db.session.rollback()      
+    db.create_all()
 # جدول حفظ إعدادات الأدمن (مثل المفتاح والنموذج المختار)
 class Setting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -74,27 +87,25 @@ def get_ai_config():
 def receive_terms():
     auth_header = request.headers.get('Authorization')
     expected_token = f"Bearer {os.getenv('INGEST_API_KEY')}"
+    
     if not auth_header or auth_header != expected_token:
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    data = request.get_json()
-    if not data or 'terms' not in data:
-        return jsonify({"error": "Invalid payload. 'terms' list is required."}), 400
-    
-    added_count = 0
-    for item in data['terms']:
-        word = item.get('word', '').strip()
-        definition = item.get('definition', '').strip()
-        category = item.get('category', 'Extracted')
+        return jsonify({'error': 'Unauthorized'}), 401
         
-        if word and definition:
-            new_term = Term(word=word, definition=definition, category=category, status='pending')
+    data = request.get_json()
+    terms = data.get('terms', [])
+    
+    for item in terms:
+        eng = item.get('english_term')
+        if eng:
+            new_term = Term(
+                english_term=eng,
+                arabic_term=item.get('arabic_term'),
+                arabic_description=item.get('arabic_description')
+            )
             db.session.add(new_term)
-            added_count += 1
             
     db.session.commit()
-    return jsonify({"status": "success", "added_terms": added_count}), 201
-
+    return jsonify({'message': 'Terms received successfully'}), 201
 # --- المسارات والصفحات ---
 @app.route('/')
 @login_required
