@@ -48,7 +48,15 @@ class Setting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
     value = db.Column(db.Text, nullable=True)
-
+with app.app_context():
+    try:
+        from sqlalchemy import text
+        db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        
+    db.create_all()
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
