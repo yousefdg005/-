@@ -37,7 +37,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
-
+// تفعيل خاصية تحديد الكل (Select All) في جدول الأدمن
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            // جلب جميع مربعات التحديد الخاصة بالمصطلحات
+            const checkboxes = document.querySelectorAll('.term-checkbox');
+            // جعل حالة كل مربع مطابقة لحالة مربع (تحديد الكل)
+            checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+        });
+    }
 // رسالة تأكيد للأدمن
 function confirmAction(message) {
     return confirm(message);

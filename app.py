@@ -346,5 +346,37 @@ def register():
         return redirect(url_for('login'))
         
     return render_template('login.html')
+@app.route('/admin/bulk_action', methods=['POST'])
+@login_required
+def bulk_action():
+    # التأكد من أن المستخدم أدمن
+    if not getattr(current_user, 'is_admin', False):
+        flash('غير مصرح لك بالدخول.', 'danger')
+        return redirect(url_for('index'))
+        
+    action = request.form.get('action')
+    term_ids = request.form.getlist('term_ids') # يجلب قائمة بكل الـ IDs المحددة
+    
+    if not term_ids:
+        flash('لم يتم تحديد أي مصطلحات للقيام بهذه العملية!', 'warning')
+        return redirect(url_for('admin'))
+        
+    for term_id in term_ids:
+        term = Term.query.get(term_id)
+        if term and term.status == 'pending':
+            if action == 'approve':
+                term.status = 'approved'
+            elif action == 'delete':
+                db.session.delete(term)
+                
+    db.session.commit()
+    
+    if action == 'approve':
+        flash(f'تم اعتماد {len(term_ids)} مصطلح بنجاح!', 'success')
+    elif action == 'delete':
+        flash(f'تم حذف {len(term_ids)} مصطلح بنجاح!', 'success')
+        
+    return redirect(url_for('admin'))
+
 if __name__ == '__main__':
     app.run(debug=True)
