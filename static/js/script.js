@@ -3,26 +3,35 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
         let alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {
-            let bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
+            // التأكد من وجود بوتستراب لتفادي أخطاء الكونسول
+            if(typeof bootstrap !== 'undefined') {
+                let bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            } else {
+                alert.style.display = 'none';
+            }
         });
     }, 4000);
 
-    // البحث المباشر في صفحة القاموس
+    // البحث المباشر في صفحة القاموس (محدث ليعمل مع الجداول)
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
         searchInput.addEventListener('keyup', function() {
             let filter = searchInput.value.toLowerCase();
-            let cards = document.querySelectorAll('.term-container');
+            // جلب جميع صفوف الجدول (<tr>)
+            let rows = document.querySelectorAll('.term-row');
             
-            cards.forEach(function(cardContainer) {
-                let word = cardContainer.querySelector('.term-word').textContent.toLowerCase();
-                let def = cardContainer.querySelector('.term-def').textContent.toLowerCase();
+            rows.forEach(function(row) {
+                // جلب النصوص من كل عمود (<td>) داخل الصف
+                let englishTerm = row.querySelector('.english-term').textContent.toLowerCase();
+                let arabicTerm = row.querySelector('.arabic-term').textContent.toLowerCase();
+                let arabicDesc = row.querySelector('.arabic-desc').textContent.toLowerCase();
                 
-                if (word.includes(filter) || def.includes(filter)) {
-                    cardContainer.style.display = ""; 
+                // إظهار الصف إذا كان أي من الأعمدة يحتوي على نص البحث
+                if (englishTerm.includes(filter) || arabicTerm.includes(filter) || arabicDesc.includes(filter)) {
+                    row.style.display = ""; 
                 } else {
-                    cardContainer.style.display = "none"; 
+                    row.style.display = "none"; // إخفاء الصف إذا لم يطابق
                 }
             });
         });
