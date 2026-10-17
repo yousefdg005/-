@@ -140,9 +140,8 @@ def logout():
 @app.route('/dictionary')
 @login_required
 def dictionary():
-    terms = Term.query.filter_by(status='approved').order_by(Term.word).all()
+    terms = Term.query.filter_by(status='approved').order_by(Term.english_term).all()
     return render_template('dictionary.html', terms=terms)
-
 @app.route('/admin', methods=['GET', 'POST'])
 @login_required
 def admin_dashboard():
