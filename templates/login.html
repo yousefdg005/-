@@ -1,27 +1,872 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-4">
-        <div class="card shadow-sm border-0 rounded-3">
-            <div class="card-body p-4">
-                <h3 class="card-title text-center mb-4 text-primary fw-bold">Secure Login</h3>
-                <form method="POST">
-                    <div class="mb-3">
-                        <label class="form-label text-muted">Username</label>
-                        <input type="text" name="username" class="form-control" placeholder="Enter username" required>
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label text-muted">Password</label>
-                        <input type="password" name="password" class="form-control" placeholder="Enter password" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100 btn-custom py-2 fw-bold">Login</button>
-                </form>
-                <hr class="my-4">
-                <div class="text-center">
-                    <p class="mb-0 text-muted">New Reader? <a href="{{ url_for('register') }}" class="text-success text-decoration-none fw-bold">Create Reader Account</a></p>
-                </div>
-            </div>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>القاموس القانوني - بوابة الدخول</title>
+    
+    <!-- خطوط جوجل (Amiri للعناوين, Cairo للنصوص) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-gold: #d4af37;
+            --dark-gold: #aa8529;
+            --bg-color: #050e14; /* أزرق ليلي غامق جداً */
+            --danger: #e74c3c;
+            --text-light: #f5f6fa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            overflow: hidden; /* نمنع التمرير، المشهد ثلاثي الأبعاد يغطي الشاشة */
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* حاوية Canvas */
+        #webgl-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* واجهة المستخدم (UI Layer) */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none; /* للسماح بنفاذ النقرات للمشهد ثلاثي الأبعاد */
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* العناصر القابلة للنقر في واجهة المستخدم */
+        .interactive {
+            pointer-events: auto;
+        }
+
+        header {
+            padding: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: 'Amiri', serif;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-gold);
+            text-shadow: 0 2px 10px rgba(212, 175, 55, 0.3);
+        }
+
+        .lang-btn {
+            background: transparent;
+            border: 1px solid var(--primary-gold);
+            color: var(--primary-gold);
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .lang-btn:hover {
+            background: var(--primary-gold);
+            color: var(--bg-color);
+        }
+
+        /* لافتات الكفتين (HTML Overlays) */
+        .pan-label {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            background: rgba(5, 14, 20, 0.85);
+            border: 1px solid var(--dark-gold);
+            padding: 0.5rem 1.5rem;
+            border-radius: 30px;
+            font-family: 'Amiri', serif;
+            font-size: 1.2rem;
+            color: var(--primary-gold);
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.3s ease;
+            pointer-events: auto;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .pan-label:hover, .pan-label:focus {
+            background: var(--primary-gold);
+            color: var(--bg-color);
+            transform: translate(-50%, -60%) scale(1.05);
+            outline: none;
+        }
+
+        /* النماذج (Forms) - تصميم الرق النحاسي/الورق الفخم */
+        #forms-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            width: 90%;
+            max-width: 450px;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); /* حركة انسيابية للفافة */
+            background: linear-gradient(135deg, #1c2329 0%, #0d1317 100%);
+            border: 2px solid var(--primary-gold);
+            border-radius: 12px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8), inset 0 0 20px rgba(212,175,55,0.05);
+        }
+
+        #forms-container.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .form-view {
+            display: none;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .form-view.active {
+            display: flex;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 {
+            font-family: 'Amiri', serif;
+            color: var(--primary-gold);
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: #bdc3c7;
+        }
+
+        input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #34495e;
+            padding: 0.8rem 1rem;
+            border-radius: 6px;
+            color: #fff;
+            font-family: 'Cairo', sans-serif;
+            transition: all 0.3s;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--primary-gold);
+            background: rgba(212, 175, 55, 0.05);
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+        }
+
+        input.error {
+            border-color: var(--danger);
+            animation: shake 0.4s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+        }
+
+        .btn-submit {
+            background: var(--primary-gold);
+            color: var(--bg-color);
+            border: none;
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Cairo', sans-serif;
+            margin-top: 1rem;
+        }
+
+        .btn-submit:hover {
+            background: #e5c354;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+        }
+
+        .form-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .text-link {
+            color: var(--primary-gold);
+            cursor: pointer;
+            text-decoration: underline;
+            background: none;
+            border: none;
+            font-family: inherit;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .text-link:hover { opacity: 1; }
+
+        .btn-back {
+            position: absolute;
+            top: 1rem;
+            right: 1rem; /* RTL */
+            background: none;
+            border: none;
+            color: #7f8c8d;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .btn-back:hover { color: var(--text-light); }
+
+        .msg-box {
+            display: none;
+            padding: 0.8rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .msg-box.error { display: block; background: rgba(231, 76, 60, 0.1); border: 1px solid var(--danger); color: #ff7675; }
+        .msg-box.success { display: block; background: rgba(46, 204, 113, 0.1); border: 1px solid #2ecc71; color: #2ecc71; }
+
+        /* الشاشات الصغيرة */
+        @media (max-width: 768px) {
+            #forms-container {
+                top: auto;
+                bottom: 0;
+                transform: translate(-50%, 100%);
+                width: 100%;
+                border-radius: 20px 20px 0 0;
+                border-bottom: none;
+            }
+            #forms-container.active {
+                transform: translate(-50%, 0);
+            }
+            header { padding: 1rem; }
+            .logo { font-size: 1.5rem; }
+        }
+
+        /* تقليل الحركة لمن يطلبها */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        /* رسالة دعم بديلة */
+        #fallback-css {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            z-index: 100;
+        }
+        .no-webgl #webgl-container { display: none; }
+        .no-webgl #fallback-css { display: block; }
+    </style>
+
+    <!-- استيراد مكتبة Three.js من CDNJS (نسخة مثبتة) -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <!-- بيئة 3D -->
+    <div id="webgl-container"></div>
+
+    <!-- رسالة إذا لم يدعم المتصفح WebGL -->
+    <div id="fallback-css">
+        <h2>القاموس القانوني</h2>
+        <p>متصفحك لا يدعم تقنية WebGL. يرجى التحديث لضمان أفضل تجربة.</p>
+    </div>
+
+    <!-- طبقة واجهة المستخدم (HTML UI) -->
+    <div id="ui-layer">
+        <header class="interactive">
+            <div class="logo">القاموس القانوني</div>
+            <button class="lang-btn" id="lang-toggle">EN</button>
+        </header>
+
+        <!-- أزرار وهمية للكفتين مرتبطة بمواقع الـ 3D لسهولة الوصول (A11y) -->
+        <button id="label-login" class="pan-label" tabindex="0" aria-label="تسجيل الدخول - قارئ أو مشرف">تسجيل الدخول</button>
+        <button id="label-register" class="pan-label" tabindex="0" aria-label="إنشاء حساب قارئ جديد">إنشاء حساب</button>
+
+        <!-- حاوية النماذج -->
+        <div id="forms-container" class="interactive">
+            <button class="btn-back" id="btn-back" aria-label="العودة للميزان">×</button>
+            
+            <!-- نموذج الدخول -->
+            <form id="form-login" class="form-view" action="/login" method="POST">
+    <h2>دخول المشرف/القارئ</h2>
+    <div class="input-group">
+        <label for="login-email">اسم المستخدم</label>
+        <input type="text" id="login-email" name="username" required> <!-- أضفنا name -->
+    </div>
+    <div class="input-group">
+        <label for="login-password">كلمة المرور</label>
+        <input type="password" id="login-password" name="password" required> <!-- أضفنا name -->
+    </div>
+    <button type="submit" class="btn-submit">دخول</button>
+</form>
+
+            <!-- نموذج التسجيل -->
+            <form id="form-register" class="form-view" action="/register" method="POST">
+    <h2>حساب قارئ جديد</h2>
+    <div class="input-group">
+        <label for="reg-name">اسم المستخدم</label>
+        <input type="text" id="reg-name" name="username" required> <!-- أضفنا name -->
+    </div>
+    <div class="input-group">
+        <label for="reg-password">كلمة المرور</label>
+        <input type="password" id="reg-password" name="password" required> <!-- أضفنا name -->
+    </div>
+    <div class="input-group">
+        <label for="reg-confirm">تأكيد كلمة المرور</label>
+        <input type="password" id="reg-confirm" name="confirm_password" required> <!-- أضفنا name -->
+    </div>
+    <button type="submit" class="btn-submit">تسجيل</button>
+</form>
         </div>
     </div>
-</div>
-{% endblock %}
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // ==========================================
+        // 1. الدالتان المطلوبتان للربط لاحقاً بالخادم
+        // ==========================================
+        
+        /**
+         * دالة معالجة تسجيل الدخول (معزولة)
+         * @param {Object} payload يحتوي على email و password
+         * @returns {Promise<boolean>}
+         */
+        async function handleLogin(payload) {
+            // TODO: قم بربط هذه الدالة بـ API الخادم لاحقاً
+            return new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    // محاكاة: نجاح إذا لم تكن الحقول فارغة
+                    if(payload.email === 'admin' && payload.password === 'admin') {
+                        resolve(true);
+                    } else {
+                        reject(new Error("بيانات الدخول غير صحيحة"));
+                    }
+                }, 800);
+            });
+        }
+
+        /**
+         * دالة معالجة التسجيل (معزولة)
+         * @param {Object} payload يحتوي على البيانات
+         * @returns {Promise<boolean>}
+         */
+        async function handleRegister(payload) {
+            // TODO: قم بربط هذه الدالة بـ API الخادم لاحقاً
+            return new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    if(payload.password.length >= 6) {
+                        resolve(true);
+                    } else {
+                        reject(new Error("خطأ في الخادم"));
+                    }
+                }, 800);
+            });
+        }
+
+        // ==========================================
+        // 2. إعدادات بيئة Three.js
+        // ==========================================
+        
+        // التحقق من دعم WebGL
+        const canvasContainer = document.getElementById('webgl-container');
+        try {
+            const tempCanvas = document.createElement('canvas');
+            const gl = tempCanvas.getContext('webgl') || tempCanvas.getContext('experimental-webgl');
+            if (!gl) throw new Error('WebGL not supported');
+        } catch (e) {
+            document.body.classList.add('no-webgl');
+        }
+
+        // المشهد والكاميرا
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050e14, 0.04); // ضباب ليلي فخم
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 2, 16);
+
+        // المصيّر (Renderer)
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        // تقليل الدقة للشاشات العالية للحفاظ على الأداء (Max Pixel Ratio = 2)
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        canvasContainer.appendChild(renderer.domElement);
+
+        // الإضاءة الفخمة (Warm Lights)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        scene.add(ambientLight);
+
+        const spotLight = new THREE.SpotLight(0xffdf80, 2.5); // إضاءة دافئة
+        spotLight.position.set(0, 15, 10);
+        spotLight.angle = Math.PI / 4;
+        spotLight.penumbra = 0.5;
+        spotLight.castShadow = true;
+        spotLight.shadow.bias = -0.0001;
+        scene.add(spotLight);
+
+        // ضوء خفيف للخلفية
+        const backLight = new THREE.PointLight(0x3498db, 0.5); // أزرق خفيف
+        backLight.position.set(0, 5, -10);
+        scene.add(backLight);
+
+        // ==========================================
+        // 3. بناء الخامات والمجسمات (Materials & Geometries)
+        // ==========================================
+
+        // خامة الذهب/النحاس المصقول
+        const goldMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0xd4af37,
+            metalness: 1.0,
+            roughness: 0.15,
+            clearcoat: 0.5,
+            clearcoatRoughness: 0.2
+        });
+
+        // خامة الرخام الداكن للقاعدة
+        const marbleMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x111111,
+            metalness: 0.2,
+            roughness: 0.1,
+            clearcoat: 1.0
+        });
+
+        // مجموعة الميزان بالكامل
+        const scaleGroup = new THREE.Group();
+        scene.add(scaleGroup);
+
+        // أ) القاعدة
+        const baseGeom = new THREE.CylinderGeometry(2, 2.5, 0.5, 32);
+        const base = new THREE.Mesh(baseGeom, marbleMaterial);
+        base.position.y = -4;
+        base.receiveShadow = true;
+        base.castShadow = true;
+        scaleGroup.add(base);
+
+        // ب) العمود المركزي
+        // استخدام Lathe (خراطة) لعمل شكل مزخرف
+        const pillarPoints = [];
+        for (let i = 0; i <= 10; i++) {
+            const y = i * 0.7;
+            const x = 0.2 + Math.sin(i * 1.5) * 0.1 + (i===0? 0.3:0); // نقش خفيف
+            pillarPoints.push(new THREE.Vector2(x, y));
+        }
+        const pillarGeom = new THREE.LatheGeometry(pillarPoints, 32);
+        const pillar = new THREE.Mesh(pillarGeom, goldMaterial);
+        pillar.position.y = -3.75;
+        pillar.castShadow = true;
+        scaleGroup.add(pillar);
+
+        // الرأسيات والمفاصل العلوية للعمود
+        const topJointGeom = new THREE.SphereGeometry(0.4, 32, 32);
+        const topJoint = new THREE.Mesh(topJointGeom, goldMaterial);
+        topJoint.position.y = 3.25;
+        scaleGroup.add(topJoint);
+
+        // ج) العارضة الأفقية (التي تميل)
+        const beamGroup = new THREE.Group();
+        beamGroup.position.y = 3.25;
+        scaleGroup.add(beamGroup);
+
+        const beamBodyGeom = new THREE.CylinderGeometry(0.15, 0.15, 8, 16);
+        beamBodyGeom.rotateZ(Math.PI / 2);
+        const beamBody = new THREE.Mesh(beamBodyGeom, goldMaterial);
+        beamBody.castShadow = true;
+        beamGroup.add(beamBody);
+
+        const beamEndGeom = new THREE.SphereGeometry(0.3, 16, 16);
+        const leftEnd = new THREE.Mesh(beamEndGeom, goldMaterial);
+        leftEnd.position.x = -4;
+        const rightEnd = new THREE.Mesh(beamEndGeom, goldMaterial);
+        rightEnd.position.x = 4;
+        beamGroup.add(leftEnd, rightEnd);
+
+        // د) الكفتان والسلاسل
+        // ميزة الميزان: الكفتان دائما أفقيتان بغض النظر عن ميل العارضة
+        const leftPanPivot = new THREE.Group();
+        const rightPanPivot = new THREE.Group();
+        // تتم إضافتهما للمشهد وليس للعارضة لكي نحافظ على دورانهما المستقل، ونحدث موقعهما في حلقة الريندر
+        scaleGroup.add(leftPanPivot, rightPanPivot);
+
+        // بناء كفة واحدة (سلاسل + طبق)
+        function buildPanSystem() {
+            const group = new THREE.Group();
+            
+            // الطبق (Lathe)
+            const panPoints = [
+                new THREE.Vector2(0.0, 0.0),
+                new THREE.Vector2(1.0, 0.1),
+                new THREE.Vector2(1.5, 0.5)
+            ];
+            const panGeom = new THREE.LatheGeometry(panPoints, 32);
+            const pan = new THREE.Mesh(panGeom, goldMaterial);
+            pan.position.y = -3.5;
+            pan.castShadow = true;
+            pan.receiveShadow = true;
+            group.add(pan);
+
+            // السلاسل (Torus مبسط لتقليل الأداء)
+            const chainLength = 3;
+            for(let i=0; i<3; i++) { // 3 حبال للسلاسل لكل كفة
+                const angle = (i * Math.PI * 2) / 3;
+                const radius = 1.4;
+                const startX = Math.cos(angle) * radius;
+                const startZ = Math.sin(angle) * radius;
+                
+                // خط بسيط يمثل السلسلة بدلاً من Torus معقد جداً للحفاظ على الأداء
+                const points = [
+                    new THREE.Vector3(0, 0, 0), // أعلى الكفة
+                    new THREE.Vector3(startX, -3.5, startZ) // حافة الطبق
+                ];
+                const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
+                const lineMat = new THREE.LineBasicMaterial({ color: 0xd4af37, linewidth: 2 });
+                const line = new THREE.Line(lineGeom, lineMat);
+                group.add(line);
+            }
+            return group;
+        }
+
+        const leftPanSystem = buildPanSystem();
+        leftPanPivot.add(leftPanSystem);
+        
+        const rightPanSystem = buildPanSystem();
+        rightPanPivot.add(rightPanSystem);
+
+        // ==========================================
+        // 4. جزيئات الغبار العائمة (Dust Particles)
+        // ==========================================
+        const particlesCount = 300;
+        const posArray = new Float32Array(particlesCount * 3);
+        for(let i=0; i<particlesCount*3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 20;
+        }
+        const particlesGeom = new THREE.BufferGeometry();
+        particlesGeom.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particlesMat = new THREE.PointsMaterial({
+            size: 0.05,
+            color: 0xffdf80,
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.AdditiveBlending
+        });
+        const particles = new THREE.Points(particlesGeom, particlesMat);
+        scene.add(particles);
+
+        // ==========================================
+        // 5. محرك الفيزياء والرسوم المتحركة (State & Spring Physics)
+        // ==========================================
+        const state = {
+            mode: 'IDLE', // IDLE, LOGIN, REGISTER
+            hover: null, // 'LEFT', 'RIGHT', null
+            isReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        };
+
+        // متغيرات النابض (Spring) للعارضة
+        let beamRotZ = 0;
+        let beamVel = 0;
+        let targetBeamRotZ = 0;
+
+        // متغيرات الدوران والكاميرا
+        let scaleRotY = 0;
+        let targetScaleRotY = 0;
+        let camPos = new THREE.Vector3(0, 2, 16);
+        let targetCamPos = new THREE.Vector3(0, 2, 16);
+        
+        // Parallax للماوس
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // Raycaster لاكتشاف الكفتين
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        // ربط عناصر HTML بالكفتين (اليسار للتسجيل، اليمين للدخول حسب RTL)
+        const labelLogin = document.getElementById('label-login'); // Right pan
+        const labelRegister = document.getElementById('label-register'); // Left pan
+
+        // وظيفة لتحويل إحداثيات 3D إلى 2D على الشاشة
+        function updateLabels() {
+            if (state.mode !== 'IDLE') {
+                labelLogin.style.opacity = '0';
+                labelLogin.style.pointerEvents = 'none';
+                labelRegister.style.opacity = '0';
+                labelRegister.style.pointerEvents = 'none';
+                return;
+            }
+
+            const tempV = new THREE.Vector3();
+            
+            // كفة الدخول (اليمين)
+            rightPanPivot.getWorldPosition(tempV);
+            tempV.y -= 3.5; // موضع الطبق
+            tempV.project(camera);
+            const x1 = (tempV.x * .5 + .5) * window.innerWidth;
+            const y1 = (tempV.y * -.5 + .5) * window.innerHeight;
+            labelLogin.style.left = `${x1}px`;
+            labelLogin.style.top = `${y1}px`;
+            labelLogin.style.opacity = '1';
+            labelLogin.style.pointerEvents = 'auto';
+
+            // كفة التسجيل (اليسار)
+            leftPanPivot.getWorldPosition(tempV);
+            tempV.y -= 3.5;
+            tempV.project(camera);
+            const x2 = (tempV.x * .5 + .5) * window.innerWidth;
+            const y2 = (tempV.y * -.5 + .5) * window.innerHeight;
+            labelRegister.style.left = `${x2}px`;
+            labelRegister.style.top = `${y2}px`;
+            labelRegister.style.opacity = '1';
+            labelRegister.style.pointerEvents = 'auto';
+        }
+
+        // ==========================================
+        // 6. التفاعلات (Interactions)
+        // ==========================================
+        const formsContainer = document.getElementById('forms-container');
+        const formLogin = document.getElementById('form-login');
+        const formRegister = document.getElementById('form-register');
+        const btnBack = document.getElementById('btn-back');
+
+        function openForm(type) {
+            state.mode = type;
+            
+            // إعداد الفيزياء للكاميرا والميزان
+            if (type === 'LOGIN') { // اليمين
+                targetBeamRotZ = -0.15;
+                targetScaleRotY = -Math.PI / 6;
+                targetCamPos.set(4, 0, 8);
+                formLogin.classList.add('active');
+                formRegister.classList.remove('active');
+            } else { // اليسار (التسجيل)
+                targetBeamRotZ = 0.15;
+                targetScaleRotY = Math.PI / 6;
+                targetCamPos.set(-4, 0, 8);
+                formRegister.classList.add('active');
+                formLogin.classList.remove('active');
+            }
+
+            // إظهار النموذج بـ HTML
+            setTimeout(() => {
+                formsContainer.classList.add('active');
+            }, 300);
+        }
+
+        function resetToIdle() {
+            state.mode = 'IDLE';
+            targetBeamRotZ = 0;
+            targetScaleRotY = 0;
+            targetCamPos.set(0, 2, 16);
+            
+            formsContainer.classList.remove('active');
+            setTimeout(() => {
+                formLogin.classList.remove('active');
+                formRegister.classList.remove('active');
+                clearMessages();
+            }, 500);
+        }
+
+        // أحداث الماوس للـ Hover والـ Parallax
+        window.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+            mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+            
+            if(state.mode === 'IDLE') {
+                // Parallax خفيف
+                targetCamPos.x = mouseX * 1.5;
+                targetCamPos.y = 2 + mouseY * 0.5;
+            }
+        });
+
+        // أحداث الـ HTML Labels للتفاعل
+        labelLogin.addEventListener('mouseenter', () => targetBeamRotZ = -0.05);
+        labelLogin.addEventListener('mouseleave', () => targetBeamRotZ = 0);
+        labelLogin.addEventListener('click', () => openForm('LOGIN'));
+
+        labelRegister.addEventListener('mouseenter', () => targetBeamRotZ = 0.05);
+        labelRegister.addEventListener('mouseleave', () => targetBeamRotZ = 0);
+        labelRegister.addEventListener('click', () => openForm('REGISTER'));
+
+        btnBack.addEventListener('click', resetToIdle);
+
+        // ==========================================
+        // 7. معالجة النماذج (Form Submission)
+        // ==========================================
+        const loginMsg = document.getElementById('login-msg');
+        const registerMsg = document.getElementById('register-msg');
+
+        function showMessage(element, text, isError) {
+            element.textContent = text;
+            element.className = `msg-box ${isError ? 'error' : 'success'}`;
+        }
+
+        function clearMessages() {
+            loginMsg.className = 'msg-box';
+            registerMsg.className = 'msg-box';
+            document.querySelectorAll('input').forEach(i => i.classList.remove('error'));
+        }
+
+        function triggerErrorShake() {
+            // إضافة نبضة قوية للنابض لمحاكاة الاهتزاز
+            beamVel += (Math.random() > 0.5 ? 0.1 : -0.1);
+        }
+
+        function triggerSuccessFlash() {
+            // وميض ذهبي عبر زيادة إضاءة الكشاف ثم خفضها
+            const origIntensity = spotLight.intensity;
+            spotLight.intensity = 8.0;
+            setTimeout(() => { spotLight.intensity = origIntensity; }, 300);
+            
+            // استواء الميزان
+            targetBeamRotZ = 0;
+            setTimeout(resetToIdle, 1000);
+        }
+        // ==========================================
+        // 8. حلقة الرسوم المتحركة (Render Loop)
+        // ==========================================
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // حركة الغبار
+            particles.position.y = Math.sin(time * 0.2) * 0.5;
+            particles.rotation.y = time * 0.05;
+
+            // فيزياء الميزان (Spring/Damper)
+            if (state.isReducedMotion) {
+                beamRotZ = targetBeamRotZ;
+                scaleRotY = targetScaleRotY;
+                camera.position.copy(targetCamPos);
+            } else {
+                // Spring Physics للعارضة لتتأرجح كأنها حية
+                const tension = 0.08;
+                const damping = 0.85;
+                beamVel += (targetBeamRotZ - beamRotZ) * tension;
+                beamVel *= damping;
+                beamRotZ += beamVel;
+
+                // تنفس خفيف (Sway) في حالة الخمول
+                if (state.mode === 'IDLE' && Math.abs(beamVel) < 0.001) {
+                    beamRotZ += Math.sin(time * 1.5) * 0.005;
+                }
+
+                beamGroup.rotation.z = beamRotZ;
+
+                // Lerp بسيط لدوران الميزان بالكامل
+                scaleRotY += (targetScaleRotY - scaleRotY) * 0.05;
+                scaleGroup.rotation.y = scaleRotY;
+
+                // حركة الكاميرا
+                camera.position.lerp(targetCamPos, 0.05);
+            }
+            camera.lookAt(0, 1, 0);
+
+            // تحديث مواقع الكفتين لتبقيان عموديتين ومعلقتين بأطراف العارضة
+            const leftEndPos = new THREE.Vector3(-4, 0, 0);
+            leftEndPos.applyMatrix4(beamGroup.matrixWorld);
+            leftPanPivot.position.copy(leftEndPos);
+
+            const rightEndPos = new THREE.Vector3(4, 0, 0);
+            rightEndPos.applyMatrix4(beamGroup.matrixWorld);
+            rightPanPivot.position.copy(rightEndPos);
+
+            // تحديث أزرار HTML
+            updateLabels();
+
+            renderer.render(scene, camera);
+        }
+
+        // التجاوب مع حجم الشاشة (Responsive)
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // ضبط الكاميرا للجوال
+            if(window.innerWidth < 768 && state.mode === 'IDLE') {
+                targetCamPos.z = 22; // إبعاد الكاميرا ليظهر الميزان كاملاً
+            } else if (state.mode === 'IDLE') {
+                targetCamPos.z = 16;
+            }
+        });
+        
+        // استدعاء الحدث يدوياً لتهيئة الحجم الأولي
+        window.dispatchEvent(new Event('resize'));
+
+        // زر تغيير اللغة (وهمي للتوضيح)
+        document.getElementById('lang-toggle').addEventListener('click', (e) => {
+            const isAr = document.documentElement.dir === 'rtl';
+            document.documentElement.dir = isAr ? 'ltr' : 'rtl';
+            e.target.textContent = isAr ? 'AR' : 'EN';
+            // هنا يمكن إضافة منطق تغيير النصوص
+        });
+
+        // بدء المشهد
+        animate();
+    </script>
+</body>
+</html>
