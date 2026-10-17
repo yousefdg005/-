@@ -349,17 +349,13 @@ def register():
 @app.route('/admin/bulk_action', methods=['POST'])
 @login_required
 def bulk_action():
-    # التأكد من صلاحيات المشرف
-    if not getattr(current_user, 'is_admin', False):
-        flash('غير مصرح لك بالدخول.', 'danger')
-        return redirect(url_for('index'))
+    # التأكد من أن المستخدم مسجل الدخول (ويمكنك إضافة شرط الأدمن الخاص بك هنا)
+    if not current_user.is_authenticated:
+        flash('يجب تسجيل الدخول أولاً.', 'danger')
+        return redirect(url_for('login'))
         
     action = request.form.get('action')
-    # طباعة للتأكد في الـ Terminal (اختياري للتشخيص)
-    print(f"Action received: {action}")
-    
     term_ids = request.form.getlist('term_ids')
-    print(f"Term IDs received: {term_ids}")
     
     if not term_ids:
         flash('لم يتم تحديد أي مصطلحات للقيام بهذه العملية!', 'warning')
