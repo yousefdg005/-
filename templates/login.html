@@ -12,303 +12,248 @@
 
     <style>
         :root {
-            --primary-gold: #d4af37;
-            --dark-gold: #aa8529;
-            --bg-color: #050e14; /* أزرق ليلي غامق جداً */
-            --danger: #e74c3c;
-            --text-light: #f5f6fa;
-        }
+    --primary-gold: #d4af37;
+    --dark-gold: #aa8529;
+    --bg-color: #050e14; /* أزرق ليلي غامق جداً */
+    --danger: #e74c3c;
+    --text-light: #f5f6fa;
+}
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            user-select: none;
-        }
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
 
-        body {
-            font-family: 'Cairo', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-light);
-            overflow: hidden; /* نمنع التمرير، المشهد ثلاثي الأبعاد يغطي الشاشة */
-            width: 100vw;
-            height: 100vh;
-        }
+body {
+    font-family: 'Cairo', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-light);
+    overflow: hidden; /* نمنع التمرير، المشهد ثلاثي الأبعاد يغطي الشاشة */
+    width: 100%;
+    height: 100dvh; /* يدعم متصفحات الجوال لمنع اقتطاع الشاشة */
+}
 
-        /* حاوية Canvas */
-        #webgl-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
+/* حاوية Canvas */
+#webgl-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
 
-        /* واجهة المستخدم (UI Layer) */
-        #ui-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10;
-            pointer-events: none; /* للسماح بنفاذ النقرات للمشهد ثلاثي الأبعاد */
-            display: flex;
-            flex-direction: column;
-        }
+/* واجهة المستخدم (UI Layer) */
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+}
 
-        /* العناصر القابلة للنقر في واجهة المستخدم */
-        .interactive {
-            pointer-events: auto;
-        }
+.interactive {
+    pointer-events: auto;
+}
 
-        header {
-            padding: 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+header {
+    padding: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-        .logo {
-            font-family: 'Amiri', serif;
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--primary-gold);
-            text-shadow: 0 2px 10px rgba(212, 175, 55, 0.3);
-        }
+.logo {
+    font-family: 'Amiri', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-gold);
+    text-shadow: 0 2px 10px rgba(212, 175, 55, 0.3);
+}
 
-        .lang-btn {
-            background: transparent;
-            border: 1px solid var(--primary-gold);
-            color: var(--primary-gold);
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            font-family: 'Cairo', sans-serif;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
+.lang-btn {
+    background: transparent;
+    border: 1px solid var(--primary-gold);
+    color: var(--primary-gold);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-family: 'Cairo', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
 
-        .lang-btn:hover {
-            background: var(--primary-gold);
-            color: var(--bg-color);
-        }
+.lang-btn:hover {
+    background: var(--primary-gold);
+    color: var(--bg-color);
+}
 
-        /* لافتات الكفتين (HTML Overlays) */
-        .pan-label {
-            position: absolute;
-            transform: translate(-50%, -50%);
-            background: rgba(5, 14, 20, 0.85);
-            border: 1px solid var(--dark-gold);
-            padding: 0.5rem 1.5rem;
-            border-radius: 30px;
-            font-family: 'Amiri', serif;
-            font-size: 1.2rem;
-            color: var(--primary-gold);
-            backdrop-filter: blur(4px);
-            opacity: 0;
-            transition: opacity 0.5s ease, transform 0.3s ease;
-            pointer-events: auto;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
+/* لافتات الكفتين */
+.pan-label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    background: rgba(5, 14, 20, 0.85);
+    border: 1px solid var(--dark-gold);
+    padding: 0.5rem 1.5rem;
+    border-radius: 30px;
+    font-family: 'Amiri', serif;
+    font-size: 1.2rem;
+    color: var(--primary-gold);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    transition: opacity 0.5s ease, transform 0.3s ease;
+    pointer-events: auto;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
 
-        .pan-label:hover, .pan-label:focus {
-            background: var(--primary-gold);
-            color: var(--bg-color);
-            transform: translate(-50%, -60%) scale(1.05);
-            outline: none;
-        }
+.pan-label:hover, .pan-label:focus {
+    background: var(--primary-gold);
+    color: var(--bg-color);
+    transform: translate(-50%, -60%) scale(1.05);
+    outline: none;
+}
 
-        /* النماذج (Forms) - تصميم الرق النحاسي/الورق الفخم */
-        #forms-container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0.9);
-            width: 90%;
-            max-width: 450px;
-            opacity: 0;
-            pointer-events: none;
-            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); /* حركة انسيابية للفافة */
-            background: linear-gradient(135deg, #1c2329 0%, #0d1317 100%);
-            border: 2px solid var(--primary-gold);
-            border-radius: 12px;
-            padding: 2.5rem;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8), inset 0 0 20px rgba(212,175,55,0.05);
-        }
+/* النماذج (الرق النحاسي) */
+#forms-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    width: 90%;
+    max-width: 450px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    background: linear-gradient(135deg, #1c2329 0%, #0d1317 100%);
+    border: 2px solid var(--primary-gold);
+    border-radius: 12px;
+    padding: 2.5rem;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8), inset 0 0 20px rgba(212,175,55,0.05);
+}
 
-        #forms-container.active {
-            opacity: 1;
-            pointer-events: auto;
-            transform: translate(-50%, -50%) scale(1);
-        }
+#forms-container.active {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
+}
 
-        .form-view {
-            display: none;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
+.form-view {
+    display: none;
+    flex-direction: column;
+    gap: 1.5rem;
+}
 
-        .form-view.active {
-            display: flex;
-            animation: fadeIn 0.5s ease forwards;
-        }
+.form-view.active {
+    display: flex;
+    animation: fadeIn 0.5s ease forwards;
+}
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
-        h2 {
-            font-family: 'Amiri', serif;
-            color: var(--primary-gold);
-            text-align: center;
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
+h2 {
+    font-family: 'Amiri', serif;
+    color: var(--primary-gold);
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
 
-        .input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
 
-        label {
-            font-size: 0.9rem;
-            color: #bdc3c7;
-        }
+label {
+    font-size: 0.9rem;
+    color: #bdc3c7;
+}
 
-        input {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid #34495e;
-            padding: 0.8rem 1rem;
-            border-radius: 6px;
-            color: #fff;
-            font-family: 'Cairo', sans-serif;
-            transition: all 0.3s;
-            outline: none;
-        }
+input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid #34495e;
+    padding: 0.8rem 1rem;
+    border-radius: 6px;
+    color: #fff;
+    font-family: 'Cairo', sans-serif;
+    transition: all 0.3s;
+    outline: none;
+}
 
-        input:focus {
-            border-color: var(--primary-gold);
-            background: rgba(212, 175, 55, 0.05);
-            box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
-        }
+input:focus {
+    border-color: var(--primary-gold);
+    background: rgba(212, 175, 55, 0.05);
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+}
 
-        input.error {
-            border-color: var(--danger);
-            animation: shake 0.4s;
-        }
+.btn-submit {
+    background: var(--primary-gold);
+    color: var(--bg-color);
+    border: none;
+    padding: 1rem;
+    border-radius: 6px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: 'Cairo', sans-serif;
+    margin-top: 1rem;
+}
 
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            50% { transform: translateX(5px); }
-            75% { transform: translateX(-5px); }
-        }
+.btn-submit:hover {
+    background: #e5c354;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+}
 
-        .btn-submit {
-            background: var(--primary-gold);
-            color: var(--bg-color);
-            border: none;
-            padding: 1rem;
-            border-radius: 6px;
-            font-size: 1.1rem;
-            font-weight: 800;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-family: 'Cairo', sans-serif;
-            margin-top: 1rem;
-        }
+.btn-back {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    color: #7f8c8d;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: color 0.3s;
+}
 
-        .btn-submit:hover {
-            background: #e5c354;
-            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
-        }
+.btn-back:hover { color: var(--text-light); }
 
-        .form-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.9rem;
-        }
-
-        .text-link {
-            color: var(--primary-gold);
-            cursor: pointer;
-            text-decoration: underline;
-            background: none;
-            border: none;
-            font-family: inherit;
-            opacity: 0.8;
-            transition: opacity 0.3s;
-        }
-
-        .text-link:hover { opacity: 1; }
-
-        .btn-back {
-            position: absolute;
-            top: 1rem;
-            right: 1rem; /* RTL */
-            background: none;
-            border: none;
-            color: #7f8c8d;
-            font-size: 1.5rem;
-            cursor: pointer;
-            transition: color 0.3s;
-        }
-
-        .btn-back:hover { color: var(--text-light); }
-
-        .msg-box {
-            display: none;
-            padding: 0.8rem;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            text-align: center;
-        }
-
-        .msg-box.error { display: block; background: rgba(231, 76, 60, 0.1); border: 1px solid var(--danger); color: #ff7675; }
-        .msg-box.success { display: block; background: rgba(46, 204, 113, 0.1); border: 1px solid #2ecc71; color: #2ecc71; }
-
-        /* الشاشات الصغيرة */
-        @media (max-width: 768px) {
-            #forms-container {
-                top: auto;
-                bottom: 0;
-                transform: translate(-50%, 100%);
-                width: 100%;
-                border-radius: 20px 20px 0 0;
-                border-bottom: none;
-            }
-            #forms-container.active {
-                transform: translate(-50%, 0);
-            }
-            header { padding: 1rem; }
-            .logo { font-size: 1.5rem; }
-        }
-
-        /* تقليل الحركة لمن يطلبها */
-        @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
-                scroll-behavior: auto !important;
-            }
-        }
-
-        /* رسالة دعم بديلة */
-        #fallback-css {
-            display: none;
-            text-align: center;
-            padding: 2rem;
-            z-index: 100;
-        }
-        .no-webgl #webgl-container { display: none; }
-        .no-webgl #fallback-css { display: block; }
+/* ========================================== */
+/* إعدادات الشاشات الصغيرة والجوال (التي طلبناها) */
+/* ========================================== */
+@media (max-width: 768px) {
+    #forms-container {
+        top: auto;
+        bottom: 0;
+        transform: translate(-50%, 120%);
+        width: 100%;
+        border-radius: 20px 20px 0 0;
+        border-bottom: none;
+        padding: 1.5rem;
+        max-height: 85dvh; /* يسمح بالتمرير عند ظهور الكيبورد */
+        overflow-y: auto; 
+    }
+    #forms-container.active {
+        transform: translate(-50%, 0);
+    }
+    header { padding: 1rem; }
+    .logo { font-size: 1.3rem; }
+    .pan-label { 
+        font-size: 0.9rem; 
+        padding: 0.4rem 1rem; 
+    }
+}
     </style>
 
     <!-- استيراد مكتبة Three.js من CDNJS (نسخة مثبتة) -->
@@ -691,28 +636,28 @@
         const btnBack = document.getElementById('btn-back');
 
         function openForm(type) {
-            state.mode = type;
-            
-            // إعداد الفيزياء للكاميرا والميزان
-            if (type === 'LOGIN') { // اليمين
-                targetBeamRotZ = -0.15;
-                targetScaleRotY = -Math.PI / 6;
-                targetCamPos.set(4, 0, 8);
-                formLogin.classList.add('active');
-                formRegister.classList.remove('active');
-            } else { // اليسار (التسجيل)
-                targetBeamRotZ = 0.15;
-                targetScaleRotY = Math.PI / 6;
-                targetCamPos.set(-4, 0, 8);
-                formRegister.classList.add('active');
-                formLogin.classList.remove('active');
-            }
+    state.mode = type;
+    const isMobile = window.innerWidth < 768;
+    
+    if (type === 'LOGIN') { 
+        targetBeamRotZ = -0.15;
+        targetScaleRotY = -Math.PI / 6;
+        // في الجوال نصعد بالكاميرا لتجنب تغطية النموذج للميزان
+        targetCamPos.set(isMobile ? 0 : 4, isMobile ? -3 : 0, isMobile ? 22 : 8);
+        formLogin.classList.add('active');
+        formRegister.classList.remove('active');
+    } else { 
+        targetBeamRotZ = 0.15;
+        targetScaleRotY = Math.PI / 6;
+        targetCamPos.set(isMobile ? 0 : -4, isMobile ? -3 : 0, isMobile ? 22 : 8);
+        formRegister.classList.add('active');
+        formLogin.classList.remove('active');
+    }
 
-            // إظهار النموذج بـ HTML
-            setTimeout(() => {
-                formsContainer.classList.add('active');
-            }, 300);
-        }
+    setTimeout(() => {
+        formsContainer.classList.add('active');
+    }, 300);
+}
 
         function resetToIdle() {
             state.mode = 'IDLE';
@@ -842,17 +787,19 @@
 
         // التجاوب مع حجم الشاشة (Responsive)
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            
-            // ضبط الكاميرا للجوال
-            if(window.innerWidth < 768 && state.mode === 'IDLE') {
-                targetCamPos.z = 22; // إبعاد الكاميرا ليظهر الميزان كاملاً
-            } else if (state.mode === 'IDLE') {
-                targetCamPos.z = 16;
-            }
-        });
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+    
+    // ضبط الكاميرا للجوال
+    if(width < 768 && state.mode === 'IDLE') {
+        targetCamPos.z = 28; // إبعاد أكبر للكاميرا لاحتواء الميزان
+    } else if (state.mode === 'IDLE') {
+        targetCamPos.z = 16;
+    }
+});
         
         // استدعاء الحدث يدوياً لتهيئة الحجم الأولي
         window.dispatchEvent(new Event('resize'));
