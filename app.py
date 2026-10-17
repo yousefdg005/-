@@ -349,13 +349,17 @@ def register():
 @app.route('/admin/bulk_action', methods=['POST'])
 @login_required
 def bulk_action():
-    # التأكد من أن المستخدم أدمن
+    # التأكد من صلاحيات المشرف
     if not getattr(current_user, 'is_admin', False):
         flash('غير مصرح لك بالدخول.', 'danger')
         return redirect(url_for('index'))
         
     action = request.form.get('action')
-    term_ids = request.form.getlist('term_ids') # يجلب قائمة بكل الـ IDs المحددة
+    # طباعة للتأكد في الـ Terminal (اختياري للتشخيص)
+    print(f"Action received: {action}")
+    
+    term_ids = request.form.getlist('term_ids')
+    print(f"Term IDs received: {term_ids}")
     
     if not term_ids:
         flash('لم يتم تحديد أي مصطلحات للقيام بهذه العملية!', 'warning')
@@ -363,7 +367,7 @@ def bulk_action():
         
     for term_id in term_ids:
         term = Term.query.get(term_id)
-        if term and term.status == 'pending':
+        if term:
             if action == 'approve':
                 term.status = 'approved'
             elif action == 'delete':
@@ -372,9 +376,9 @@ def bulk_action():
     db.session.commit()
     
     if action == 'approve':
-        flash(f'تم اعتماد {len(term_ids)} مصطلح بنجاح!', 'success')
+        flash(f'تم اعتماد المصطلحات المحددة بنجاح!', 'success')
     elif action == 'delete':
-        flash(f'تم حذف {len(term_ids)} مصطلح بنجاح!', 'success')
+        flash(f'تم حذف المصطلحات المحددة بنجاح!', 'success')
         
     return redirect(url_for('admin'))
 
