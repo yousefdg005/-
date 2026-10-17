@@ -1,24 +1,42 @@
 {% extends "base.html" %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
-    <h2 class="text-primary fw-bold mb-3 mb-md-0">Dictionary Archive</h2>
-    <input type="text" id="searchInput" class="form-control w-100 w-md-25" placeholder="🔍 Search terms or definitions...">
+    <h2 class="fw-bold text-dark mb-2 mb-md-0">📖 Legal Dictionary (القاموس القانوني)</h2>
 </div>
-<hr>
 
-<div class="row" id="dictionaryList">
-    {% for term in terms %}
-    <div class="col-md-4 mb-4 term-container">
-        <div class="card term-card shadow-sm h-100 p-3">
-            <div class="card-body p-0">
-                <h5 class="card-title term-word fs-4">{{ term.word }}</h5>
-                <div class="term-category"><span class="badge bg-secondary">{{ term.category }}</span></div>
-                <p class="card-text term-def text-muted mt-2">{{ term.definition }}</p>
-            </div>
-        </div>
-    </div>
-    {% else %}
-    <div class="col-12"><p class="text-muted text-center mt-5">No approved terms available yet.</p></div>
-    {% endfor %}
+<!-- جدول عرض المصطلحات المعتمدة -->
+<div class="table-responsive bg-white shadow-sm rounded-3 mb-5 border">
+    <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark">
+            <tr>
+                <th style="width: 30%; padding: 15px;">English Term (المصطلح الإنجليزي)</th>
+                <th style="width: 30%; padding: 15px;">Arabic Term (المقابل العربي)</th>
+                <th style="width: 40%; padding: 15px;">Arabic Description (الشرح والتعريف)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for term in terms %}
+            <tr>
+                <td class="fw-bold text-primary" style="padding: 15px; font-size: 1.1rem;">
+                    {{ term.english_term }}
+                </td>
+                <td class="fw-bold text-dark" style="padding: 15px; font-size: 1.1rem;">
+                    {{ term.arabic_term or '-' }}
+                </td>
+                <td class="text-muted" style="padding: 15px;">
+                    {{ term.arabic_description or '-' }}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="3" class="text-center py-5 text-muted">
+                    <h5 class="mb-2">No approved terms available yet.</h5>
+                    <p class="mb-0">لم يتم اعتماد أي مصطلحات حتى الآن. ستظهر المصطلحات هنا فور موافقة الإدارة عليها.</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 {% endblock %}
