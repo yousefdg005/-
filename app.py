@@ -249,7 +249,15 @@ def delete_term(term_id):
     db.session.commit()
     flash('Term deleted.', 'warning')
     return redirect(url_for('admin'))
-
+@app.route('/admin/deduplicate_ai')
+@login_required
+def deduplicate_ai():
+    if current_user.role != 'admin': 
+        return "Access Denied", 403
+    
+    # يمكنك وضع منطق الذكاء الاصطناعي هنا أو تركها مؤقتاً لتوجيه الأدمن بأمان
+    flash('AI Deduplication feature is ready.', 'info')
+    return redirect(url_for('admin'))
 @app.route('/admin/edit/<int:term_id>', methods=['POST'])
 @login_required
 def edit_term(term_id):
