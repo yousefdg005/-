@@ -100,3 +100,52 @@ body {
     border: 1px solid var(--primary-gold);
     color: var(--primary-gold);
 }
+/* ========================================== */
+/* إصلاح ألوان لوحة الإدارة (Admin Dashboard) */
+/* ========================================== */
+
+/* تحويل الصناديق البيضاء إلى ألواح داكنة */
+.bg-white, .card {
+    background: var(--panel-bg) !important;
+    border: 1px solid var(--dark-gold) !important;
+    color: var(--text-light) !important;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5) !important;
+}
+
+/* تنسيق النصوص داخل الصناديق */
+.card-header, .card-title, label {
+    color: var(--primary-gold) !important;
+}
+
+/* تنسيق حقول الإدخال والقوائم المنسدلة في لوحة الإدارة */
+.form-control, .form-select {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid #34495e !important;
+    color: #fff !important;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-gold) !important;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2) !important;
+}
+
+/* إصلاح ألوان جدول المصطلحات المستخرجة (Pending Terms) */
+.table {
+    color: var(--text-light) !important;
+}
+
+.table thead th {
+    background-color: rgba(212, 175, 55, 0.1) !important;
+    color: var(--primary-gold) !important;
+    border-bottom: 2px solid var(--dark-gold) !important;
+}
+
+.table tbody td {
+    background-color: transparent !important;
+    color: var(--text-light) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.table-hover tbody tr:hover td {
+    background-color: rgba(212, 175, 55, 0.08) !important;
+}
