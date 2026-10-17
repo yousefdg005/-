@@ -86,7 +86,10 @@ def get_ai_config():
 @app.route('/api/receive-terms', methods=['POST'])
 def receive_terms():
     auth_header = request.headers.get('Authorization')
-    expected_token = f"Bearer {os.getenv('INGEST_API_KEY')}"
+    
+    # قراءة المفتاح مع توفير قيمة افتراضية احتياطية
+    ingest_key = os.getenv('INGEST_API_KEY', 'my_secure_platform_ingest_token_2026')
+    expected_token = f"Bearer {ingest_key}"
     
     if not auth_header or auth_header != expected_token:
         return jsonify({'error': 'Unauthorized'}), 401
