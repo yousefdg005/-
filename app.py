@@ -230,6 +230,22 @@ def bulk_action():
         
     return redirect(url_for('admin'))
 
+@app.route('/admin/approved_bulk_delete', methods=['POST'])
+@login_required
+def approved_bulk_delete():
+    if current_user.role != 'admin':
+        return "Access Denied", 403
+    term_ids = request.form.getlist('approved_term_ids')
+    if not term_ids:
+        flash('لم يتم تحديد أي مصطلحات من القاموس المحفوظ.', 'warning')
+        return redirect(url_for('admin'))
+    deleted_count = Term.query.filter(
+        Term.id.in_(term_ids), Term.status == 'approved'
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    flash(f'تم حذف {deleted_count} مصطلحاً محدداً من القاموس المحفوظ.', 'success')
+    return redirect(url_for('admin'))
+
 @app.route('/admin/approve/<int:term_id>')
 @login_required
 def approve_term(term_id):
