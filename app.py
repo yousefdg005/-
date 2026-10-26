@@ -242,15 +242,25 @@ def bulk_action():
 def approved_bulk_delete():
     if current_user.role != 'admin':
         return "Access Denied", 403
+    
     term_ids = request.form.getlist('approved_term_ids')
     if not term_ids:
         flash('لم يتم تحديد أي مصطلحات من القاموس المحفوظ.', 'warning')
         return redirect(url_for('admin'))
-    deleted_count = Term.query.filter(
-        Term.id.in_(term_ids), Term.status == 'approved'
-    ).delete(synchronize_session=False)
-    db.session.commit()
-    flash(f'تم حذف {deleted_count} مصطلحاً محدداً من القاموس المحفوظ.', 'success')
+        
+    try:
+        # استخدام الأعمدة المحدثة والتحقق الصحيح
+        deleted_count = Term.query.filter(
+            Term.id.in_(term_ids), 
+            Term.status == 'approved'
+        ).delete(synchronize_session=False)
+        
+        db.session.commit()
+        flash(f'تم حذف {deleted_count} مصطلحاً محدداً من القاموس المحفوظ.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'حدث خطأ أثناء محاولة الحذف: {str(e)}', 'danger')
+        
     return redirect(url_for('admin'))
 
 @app.route('/admin/approve/<int:term_id>')
