@@ -220,20 +220,26 @@ def bulk_action():
         flash('لم يتم تحديد أي مصطلحات للقيام بهذه العملية!', 'warning')
         return redirect(url_for('admin'))
         
-    for term_id in term_ids:
-        term = Term.query.get(term_id)
-        if term:
+    try:
+        # تحويل المعرفات إلى أعداد صحيحة
+        term_ids_int = [int(t) for t in term_ids]
+        terms = Term.query.filter(Term.id.in_(term_ids_int)).all()
+        
+        for term in terms:
             if action == 'approve':
                 term.status = 'approved'
             elif action == 'delete':
                 db.session.delete(term)
                 
-    db.session.commit()
-    
-    if action == 'approve':
-        flash('تم اعتماد المصطلحات المحددة بنجاح!', 'success')
-    elif action == 'delete':
-        flash('تم حذف المصطلحات المحددة بنجاح!', 'success')
+        db.session.commit()
+        
+        if action == 'approve':
+            flash('تم اعتماد المصطلحات المحددة بنجاح!', 'success')
+        elif action == 'delete':
+            flash('تم حذف المصطلحات المحددة بنجاح!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'حدث خطأ: {str(e)}', 'danger')
         
     return redirect(url_for('admin'))
 
@@ -249,9 +255,11 @@ def approved_bulk_delete():
         return redirect(url_for('admin'))
         
     try:
-        # استخدام الأعمدة المحدثة والتحقق الصحيح
+        # تحويل المعرفات إلى أعداد صحيحة لتتوافق مع نوع العمود في PostgreSQL
+        term_ids_int = [int(t) for t in term_ids]
+        
         deleted_count = Term.query.filter(
-            Term.id.in_(term_ids), 
+            Term.id.in_(term_ids_int), 
             Term.status == 'approved'
         ).delete(synchronize_session=False)
         
