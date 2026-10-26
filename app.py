@@ -34,13 +34,16 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='reader')
 
+# تحديث هيكل جدول المصطلحات
 class Term(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    english_term = db.Column(db.String(255), nullable=False)
-    arabic_term = db.Column(db.String(255), nullable=True)
-    arabic_description = db.Column(db.Text, nullable=True)
+    en = db.Column(db.String(255), nullable=False)
+    ar = db.Column(db.String(255), nullable=True)
+    definition = db.Column(db.Text, nullable=True)
+    subject_field = db.Column(db.String(150), nullable=True, default="قانون عام") # إضافة عمود المجال
     date = db.Column(db.DateTime, default=db.func.now())
     status = db.Column(db.String(50), default='pending')
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
 
 # جدول حفظ إعدادات الأدمن
 class Setting(db.Model):
@@ -79,12 +82,14 @@ def receive_terms():
     terms = data.get('terms', [])
     
     for item in terms:
-        eng = item.get('english_term')
+        # تحديث المسميات لتطابق الاستخراج الجديد
+        eng = item.get('en')
         if eng:
             new_term = Term(
-                english_term=eng,
-                arabic_term=item.get('arabic_term'),
-                arabic_description=item.get('arabic_description')
+                en=eng,
+                ar=item.get('ar'),
+                definition=item.get('definition'),
+                subject_field=item.get('subject field') # استلام المجال
             )
             db.session.add(new_term)
             
@@ -133,7 +138,8 @@ def logout():
 @app.route('/dictionary')
 @login_required
 def dictionary():
-    terms = Term.query.filter_by(status='approved').order_by(Term.english_term).all()
+    # تحديث جلب البيانات لترتيبها حسب الحقل الجديد
+    terms = Term.query.filter_by(status='approved').order_by(Term.en).all()
     return render_template('dictionary.html', terms=terms)
 
 @app.route('/admin', methods=['GET', 'POST'])
@@ -143,14 +149,17 @@ def admin():
         return "Access Denied", 403
     
     if request.method == 'POST':
-        english_term = request.form.get('english_term')
-        arabic_term = request.form.get('arabic_term')
-        arabic_description = request.form.get('arabic_description')
+        # تحديث الإدخال اليدوي للأدمن ليطابق الأعمدة الجديدة
+        en_term = request.form.get('en')
+        ar_term = request.form.get('ar')
+        definition = request.form.get('definition')
+        subject_field = request.form.get('subject_field', 'قانون عام')
         
         new_term = Term(
-            english_term=english_term,
-            arabic_term=arabic_term,
-            arabic_description=arabic_description,
+            en=en_term,
+            ar=ar_term,
+            definition=definition,
+            subject_field=subject_field,
             status='pending'
         )
         db.session.add(new_term)
@@ -171,7 +180,6 @@ def admin():
                            openrouter_api_key=api_key,
                            current_model=current_model)
 
-# حفظ إعدادات OpenRouter
 @app.route('/admin/save_settings', methods=['POST'])
 @login_required
 def save_settings():
@@ -198,7 +206,6 @@ def save_settings():
     flash('OpenRouter settings and AI Model saved successfully!', 'success')
     return redirect(url_for('admin'))
 
-# معالجة العمليات الجماعية (اعتماد المحدد / حذف المحدد)
 @app.route('/admin/bulk_action', methods=['POST'])
 @login_required
 def bulk_action():
@@ -265,23 +272,25 @@ def delete_term(term_id):
     db.session.commit()
     flash('Term deleted.', 'warning')
     return redirect(url_for('admin'))
+
 @app.route('/admin/deduplicate_ai')
 @login_required
 def deduplicate_ai():
     if current_user.role != 'admin': 
         return "Access Denied", 403
-    
-    # يمكنك وضع منطق الذكاء الاصطناعي هنا أو تركها مؤقتاً لتوجيه الأدمن بأمان
     flash('AI Deduplication feature is ready.', 'info')
     return redirect(url_for('admin'))
+
 @app.route('/admin/edit/<int:term_id>', methods=['POST'])
 @login_required
 def edit_term(term_id):
     if current_user.role != 'admin': return "Access Denied", 403
     term = Term.query.get_or_404(term_id)
-    term.english_term = request.form.get('english_term')
-    term.arabic_term = request.form.get('arabic_term')
-    term.arabic_description = request.form.get('arabic_description')
+    # تحديث حقول التعديل للمصطلحات
+    term.en = request.form.get('en')
+    term.ar = request.form.get('ar')
+    term.definition = request.form.get('definition')
+    term.subject_field = request.form.get('subject_field')
     db.session.commit()
     flash('Term updated.', 'success')
     return redirect(url_for('admin'))
