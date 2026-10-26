@@ -82,6 +82,7 @@ def receive_terms():
     terms = data.get('terms', [])
     
     try:
+        # إدخال المصطلحات فرادى لتجنب الضغط على الاتصال (SSL/Neon Timeout)
         for item in terms:
             eng = item.get('en')
             if eng:
@@ -89,11 +90,13 @@ def receive_terms():
                     en=eng,
                     ar=item.get('ar'),
                     definition=item.get('definition'),
-                    subject_field=item.get('subject field', 'قانون عام')
+                    subject_field=item.get('subject field', 'قانون عام'),
+                    status='pending'
                 )
                 db.session.add(new_term)
+                # حفظ كل مصطلح أو تنفيذ commit دوري لتخفيف الحمل
+                db.session.commit()
                 
-        db.session.commit()
         return jsonify({'message': 'Terms received successfully'}), 201
     except Exception as e:
         db.session.rollback()
