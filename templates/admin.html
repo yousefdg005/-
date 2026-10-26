@@ -1,130 +1,55 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
-    <h2 class="fw-bold text-gold mb-2 mb-md-0">Admin Dashboard</h2>
-    <a href="{{ url_for('deduplicate_ai') }}" class="btn btn-warning fw-bold shadow-sm" onclick="return confirmAction('Run OpenRouter AI to scan and auto-delete duplicate terms?');">
-        🧹 Run AI Deduplication
-    </a>
-</div>
-
-<!-- 🔔 إشعار المصطلحات الجديدة الواصلة من المنصة -->
-{% if new_incoming_count > 0 %}
-<div class="alert alert-info border-start border-4 border-info shadow-sm d-flex align-items-center justify-content-between p-3 mb-4 rounded-3" role="alert">
-    <div>
-        <h5 class="alert-heading mb-1 fw-bold">🔔 New Extracted Terms Alert!</h5>
-        <p class="mb-0">You have <strong>{{ new_incoming_count }}</strong> term(s) received from the platform awaiting your review and approval below.</p>
+<!-- 📚 القاموس المحفوظ: المصطلحات المعتمدة -->
+<div class="mt-5 mb-5" id="approved-dictionary">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+        <h3 class="gold-text mb-0" style="font-family: 'Amiri', serif;">📚 القاموس المحفوظ (المصطلحات المعتمدة)</h3>
+        <input type="search" id="approvedSearch" class="form-control" style="max-width: 360px;" placeholder="ابحث في القاموس المحفوظ...">
     </div>
-    <span class="badge bg-danger fs-6 px-3 py-2 rounded-pill">{{ new_incoming_count }} New Pending</span>
-</div>
-{% endif %}
 
-<!-- ⚙️ إعدادات OpenRouter ومفتاح API مع اختيار النموذج -->
-<div class="card mb-4 shadow-sm border-0 rounded-3">
-    <div class="card-header bg-dark text-white fw-bold d-flex align-items-center">
-        <span>⚙️ OpenRouter API & AI Model Settings</span>
-    </div>
-    <div class="card-body p-4">
-        <form method="POST" action="{{ url_for('save_settings') }}">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-bold text-muted">OpenRouter API Key</label>
-                    <input type="password" name="openrouter_api_key" value="{{ openrouter_api_key }}" class="form-control" placeholder="sk-or-v1-xxxxxxxx..." required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold text-muted">Select AI Model</label>
-                    <select name="openrouter_model" class="form-select">
-                        <option value="openai/gpt-3.5-turbo" {% if current_model == 'openai/gpt-3.5-turbo' %}selected{% endif %}>OpenAI GPT-3.5 Turbo</option>
-                        <option value="openai/gpt-4o-mini" {% if current_model == 'openai/gpt-4o-mini' %}selected{% endif %}>OpenAI GPT-4o Mini</option>
-                        <option value="meta-llama/llama-3.1-8b-instruct" {% if current_model == 'meta-llama/llama-3.1-8b-instruct' %}selected{% endif %}>Meta Llama 3.1 8B Instruct</option>
-                        <option value="google/gemini-flash-1.5" {% if current_model == 'google/gemini-flash-1.5' %}selected{% endif %}>Google Gemini Flash 1.5</option>
-                        <option value="anthropic/claude-3-haiku" {% if current_model == 'anthropic/claude-3-haiku' %}selected{% endif %}>Anthropic Claude 3 Haiku</option>
-                    </select>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100 btn-custom fw-bold">Save Settings</button>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
+    <!-- تم جعل النموذج يحيط بالأزرار والجدول لضمان إرسال العناصر المحددة بشكل صحيح -->
+    <form method="POST" action="{{ url_for('approved_bulk_delete') }}" id="approvedBulkForm" onsubmit="return confirmAction('هل أنت متأكد من حذف المصطلحات المحددة من القاموس المحفوظ؟')">
+        
+        <button type="submit" class="btn btn-danger mb-3">🗑️ حذف المحدد</button>
 
-<!-- ➕ إضافة مصطلح يدوي بأعمدة الهيكل الجديد -->
-<div class="card mb-5 shadow-sm border-0 rounded-3" style="border-left: 4px solid #2ecc71;">
-    <div class="card-body p-4">
-        <h5 class="text-success mb-3 fw-bold">➕ Add New Term Manually</h5>
-        <form method="POST" action="{{ url_for('admin') }}">
-            <div class="row g-3">
-                <div class="col-md-2">
-                    <input type="text" name="en" class="form-control bg-light" placeholder="English Term" required>
-                </div>
-                <div class="col-md-2">
-                    <input type="text" name="ar" class="form-control bg-light" placeholder="Arabic Term">
-                </div>
-                <div class="col-md-2">
-                    <input type="text" name="subject_field" class="form-control bg-light" placeholder="Subject Field (e.g. قانون عام)">
-                </div>
-                <div class="col-md-4">
-                    <input type="text" name="definition" class="form-control bg-light" placeholder="Arabic Description">
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-success w-100 btn-custom">Add Term</button>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- 📋 جدول مراجعة المصطلحات الواصلة والمعلقة -->
-<div class="mt-5 mb-5">
-    <h3 class="mb-4 gold-text" style="font-family: 'Amiri', serif;">📋 المصطلحات المعلقة (Pending Terms)</h3>
-    
-    <form action="/admin/bulk_action" method="POST" id="bulkForm">
-        <div class="d-flex gap-3 mb-3">
-            <button type="submit" name="action" value="approve" class="btn btn-success btn-custom" onclick="return confirmAction('هل أنت متأكد من اعتماد جميع المصطلحات المحددة؟')">
-                ✅ اعتماد المحدد
-            </button>
-            <button type="submit" name="action" value="delete" class="btn btn-danger btn-custom" onclick="return confirmAction('هل أنت متأكد من حذف جميع المصطلحات المحددة؟')">
-                🗑️ حذف المحدد
-            </button>
-        </div>
-
-        <div class="table-responsive dark-panel shadow-lg rounded-3 border-0">
-            <table class="table table-dark-custom align-middle mb-0">
+        <div class="table-responsive dark-panel shadow-lg rounded-3">
+            <table class="table table-dark-custom align-middle mb-0" id="approvedTable">
                 <thead class="thead-gold">
                     <tr>
-                        <th style="width: 5%; padding: 15px; text-align: center;">
-                            <input class="form-check-input" type="checkbox" id="selectAll" style="cursor: pointer; transform: scale(1.2);">
-                        </th>
+                        <th style="width: 5%; text-align: center;"><input type="checkbox" id="approvedSelectAll" aria-label="تحديد كل المصطلحات"></th>
                         <th style="width: 5%;">ID</th>
                         <th style="width: 20%;">المصطلح الإنجليزي</th>
                         <th style="width: 20%;">المقابل العربي</th>
                         <th style="width: 15%;">المجال</th>
                         <th style="width: 25%;">الشرح</th>
-                        <th style="width: 10%;">إجراء فردي</th>
+                        <th style="width: 10%;">إجراءات</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for term in pending_terms %}
-                    <tr class="term-row">
-                        <td style="padding: 15px; text-align: center;">
-                            <input class="form-check-input term-checkbox" type="checkbox" name="term_ids" value="{{ term.id }}" style="cursor: pointer; transform: scale(1.2);">
+                    {% for term in approved_terms %}
+                    <tr class="approved-row">
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="approved-checkbox" name="approved_term_ids" value="{{ term.id }}" aria-label="تحديد {{ term.en }}">
                         </td>
-                        <td class="text-gray">{{ term.id }}</td>
-                        <td class="gold-text fw-bold" dir="ltr" style="text-align: left;">{{ term.en }}</td>
-                        <td class="text-light fw-bold">{{ term.ar or '-' }}</td>
-                        <td class="text-info fw-bold">{{ term.subject_field or '-' }}</td>
-                        <td class="text-gray" style="font-size: 0.9rem;">{{ term.definition or '-' }}</td>
+                        <td>{{ term.id }}</td>
+                        <td class="approved-english" dir="ltr">{{ term.en }}</td>
+                        <td class="approved-arabic">{{ term.ar or '-' }}</td>
+                        <td class="approved-subject">{{ term.subject_field or '-' }}</td>
+                        <td class="approved-desc">{{ term.definition or '-' }}</td>
                         <td>
-                            <div class="d-flex gap-2">
-                                <a href="{{ url_for('approve_term', term_id=term.id) }}" class="btn btn-sm btn-success btn-custom" title="اعتماد">✅</a>
-                                <a href="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger btn-custom" title="حذف" onclick="return confirmAction('تأكيد الحذف؟')">🗑️</a>
-                            </div>
+                            <details>
+                                <summary class="btn btn-sm btn-outline-warning">تعديل</summary>
+                                <form method="POST" action="{{ url_for('edit_term', term_id=term.id) }}" class="mt-2 p-2 bg-dark rounded">
+                                    <input class="form-control mb-2" name="en" value="{{ term.en }}" required placeholder="English Term">
+                                    <input class="form-control mb-2" name="ar" value="{{ term.ar or '' }}" placeholder="المقابل العربي">
+                                    <input class="form-control mb-2" name="subject_field" value="{{ term.subject_field or '' }}" placeholder="المجال">
+                                    <textarea class="form-control mb-2" name="definition" placeholder="الشرح">{{ term.definition or '' }}</textarea>
+                                    <button class="btn btn-sm btn-warning w-100" type="submit">حفظ التعديل</button>
+                                </form>
+                            </details>
+                            <a href="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger mt-2" onclick="return confirmAction('هل أنت متأكد من حذف المصطلح من القاموس؟')">حذف</a>
                         </td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center py-4 text-gray">لا توجد مصطلحات معلقة حالياً.</td>
-                    </tr>
+                    <tr><td colspan="7" class="text-center py-4 text-gray">لا توجد مصطلحات معتمدة في القاموس بعد.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -132,72 +57,24 @@
     </form>
 </div>
 
-<!-- 📚 القاموس المحفوظ: المصطلحات المعتمدة -->
-<div class="mt-5 mb-5" id="approved-dictionary">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
-        <h3 class="gold-text mb-0" style="font-family: 'Amiri', serif;">📚 القاموس المحفوظ (المصطلحات المعتمدة)</h3>
-        <input type="search" id="approvedSearch" class="form-control" style="max-width: 360px;" placeholder="ابحث في القاموس المحفوظ...">
-    </div>
-    <form method="POST" action="{{ url_for('approved_bulk_delete') }}" id="approvedBulkForm" onsubmit="return confirmAction('هل أنت متأكد من حذف المصطلحات المحددة من القاموس المحفوظ؟')">
-        <button type="submit" class="btn btn-danger mb-3">🗑️ حذف المحدد</button>
-    </form>
-    <div class="table-responsive dark-panel shadow-lg rounded-3">
-        <table class="table table-dark-custom align-middle mb-0" id="approvedTable">
-            <thead class="thead-gold">
-                <tr>
-                    <th><input type="checkbox" id="approvedSelectAll" aria-label="تحديد كل المصطلحات"></th>
-                    <th>ID</th>
-                    <th>المصطلح الإنجليزي</th>
-                    <th>المقابل العربي</th>
-                    <th>المجال</th>
-                    <th>الشرح</th>
-                    <th>إجراءات</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for term in approved_terms %}
-                <tr class="approved-row">
-                    <td><input type="checkbox" form="approvedBulkForm" class="approved-checkbox" name="approved_term_ids" value="{{ term.id }}" aria-label="تحديد {{ term.en }}"></td>
-                    <td>{{ term.id }}</td>
-                    <td class="approved-english" dir="ltr">{{ term.en }}</td>
-                    <td class="approved-arabic">{{ term.ar or '-' }}</td>
-                    <td class="approved-subject">{{ term.subject_field or '-' }}</td>
-                    <td class="approved-desc">{{ term.definition or '-' }}</td>
-                    <td>
-                        <details>
-                            <summary class="btn btn-sm btn-outline-warning">تعديل</summary>
-                            <form method="POST" action="{{ url_for('edit_term', term_id=term.id) }}" class="mt-2">
-                                <input class="form-control mb-2" name="en" value="{{ term.en }}" required placeholder="English Term">
-                                <input class="form-control mb-2" name="ar" value="{{ term.ar or '' }}" placeholder="المقابل العربي">
-                                <input class="form-control mb-2" name="subject_field" value="{{ term.subject_field or '' }}" placeholder="المجال">
-                                <textarea class="form-control mb-2" name="definition" placeholder="الشرح">{{ term.definition or '' }}</textarea>
-                                <button class="btn btn-sm btn-warning" type="submit">حفظ التعديل</button>
-                            </form>
-                        </details>
-                        <a href="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger mt-2" onclick="return confirmAction('هل أنت متأكد من حذف المصطلح من القاموس؟')">حذف</a>
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="7" class="text-center py-4 text-gray">لا توجد مصطلحات معتمدة في القاموس بعد.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const selectAll = document.getElementById('approvedSelectAll');
-    if (selectAll) selectAll.addEventListener('change', function () {
-        document.querySelectorAll('.approved-checkbox').forEach(function (box) { box.checked = selectAll.checked; });
-    });
-    const input = document.getElementById('approvedSearch');
-    if (!input) return;
-    input.addEventListener('input', function () {
-        const query = input.value.trim().toLocaleLowerCase();
-        document.querySelectorAll('#approvedTable .approved-row').forEach(function (row) {
-            row.style.display = row.textContent.toLocaleLowerCase().includes(query) ? '' : 'none';
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            document.querySelectorAll('.approved-checkbox').forEach(function (box) { 
+                box.checked = selectAll.checked; 
+            });
         });
-    });
+    }
+    const input = document.getElementById('approvedSearch');
+    if (input) {
+        input.addEventListener('input', function () {
+            const query = input.value.trim().toLocaleLowerCase();
+            document.querySelectorAll('#approvedTable .approved-row').forEach(function (row) {
+                row.style.display = row.textContent.toLocaleLowerCase().includes(query) ? '' : 'none';
+            });
+        });
+    }
 });
 </script>
-{% endblock %}
