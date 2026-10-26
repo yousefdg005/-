@@ -81,20 +81,23 @@ def receive_terms():
     data = request.get_json()
     terms = data.get('terms', [])
     
-    for item in terms:
-        # تحديث المسميات لتطابق الاستخراج الجديد
-        eng = item.get('en')
-        if eng:
-            new_term = Term(
-                en=eng,
-                ar=item.get('ar'),
-                definition=item.get('definition'),
-                subject_field=item.get('subject field') # استلام المجال
-            )
-            db.session.add(new_term)
-            
-    db.session.commit()
-    return jsonify({'message': 'Terms received successfully'}), 201
+    try:
+        for item in terms:
+            eng = item.get('en')
+            if eng:
+                new_term = Term(
+                    en=eng,
+                    ar=item.get('ar'),
+                    definition=item.get('definition'),
+                    subject_field=item.get('subject field', 'قانون عام')
+                )
+                db.session.add(new_term)
+                
+        db.session.commit()
+        return jsonify({'message': 'Terms received successfully'}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 # --- المسارات والصفحات ---
 @app.route('/')
