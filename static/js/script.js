@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
         let alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {
-            // التأكد من وجود بوتستراب لتفادي أخطاء الكونسول
             if(typeof bootstrap !== 'undefined') {
                 let bsAlert = new bootstrap.Alert(alert);
                 bsAlert.close();
@@ -13,41 +12,39 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 4000);
 
-    // البحث المباشر في صفحة القاموس (محدث ليعمل مع الجداول)
+    // البحث المباشر في صفحة القاموس 
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
         searchInput.addEventListener('keyup', function() {
             let filter = searchInput.value.toLowerCase();
-            // جلب جميع صفوف الجدول (<tr>)
             let rows = document.querySelectorAll('.term-row');
             
             rows.forEach(function(row) {
-                // جلب النصوص من كل عمود (<td>) داخل الصف
-                let englishTerm = row.querySelector('.english-term').textContent.toLowerCase();
-                let arabicTerm = row.querySelector('.arabic-term').textContent.toLowerCase();
-                let arabicDesc = row.querySelector('.arabic-desc').textContent.toLowerCase();
+                // تحديث كلاسات البحث حسب الأعمدة الجديدة
+                let englishTerm = row.querySelector('.en-term').textContent.toLowerCase();
+                let arabicTerm = row.querySelector('.ar-term').textContent.toLowerCase();
+                let definition = row.querySelector('.definition-desc').textContent.toLowerCase();
+                let subject = row.querySelector('.subject-field').textContent.toLowerCase();
                 
-                // إظهار الصف إذا كان أي من الأعمدة يحتوي على نص البحث
-                if (englishTerm.includes(filter) || arabicTerm.includes(filter) || arabicDesc.includes(filter)) {
+                if (englishTerm.includes(filter) || arabicTerm.includes(filter) || definition.includes(filter) || subject.includes(filter)) {
                     row.style.display = ""; 
                 } else {
-                    row.style.display = "none"; // إخفاء الصف إذا لم يطابق
+                    row.style.display = "none";
                 }
             });
         });
     }
 });
+
 // تفعيل خاصية تحديد الكل (Select All) في جدول الأدمن
-    const selectAllCheckbox = document.getElementById('selectAll');
-    if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', function() {
-            // جلب جميع مربعات التحديد الخاصة بالمصطلحات
-            const checkboxes = document.querySelectorAll('.term-checkbox');
-            // جعل حالة كل مربع مطابقة لحالة مربع (تحديد الكل)
-            checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
-        });
-    }
-// رسالة تأكيد للأدمن
+const selectAllCheckbox = document.getElementById('selectAll');
+if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.term-checkbox');
+        checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+    });
+}
+
 function confirmAction(message) {
     return confirm(message);
 }
