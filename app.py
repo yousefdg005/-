@@ -1,6 +1,4 @@
 import os
-import requests
-import json
 from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -12,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback_secret_key_dictionary_2026_xyz')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 db_url = os.getenv('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -72,17 +70,24 @@ def get_ai_config():
 @app.route('/api/receive-terms', methods=['POST'])
 def receive_terms():
     auth_header = request.headers.get('Authorization')
-    ingest_key = os.getenv('INGEST_API_KEY', 'my_secure_platform_ingest_token_2026')
+    ingest_key = os.environ.get('INGEST_API_KEY')
+    if not ingest_key:
+        return jsonify({'error': 'Server configuration error: INGEST_API_KEY is not configured'}), 500
+
     expected_token = f"Bearer {ingest_key}"
-    
     if not auth_header or auth_header != expected_token:
         return jsonify({'error': 'Unauthorized'}), 401
         
     data = request.get_json()
+    if not data or not isinstance(data, dict):
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+
     terms = data.get('terms', [])
+    if not isinstance(terms, list):
+        return jsonify({'error': 'Terms payload must be a list'}), 400
     
     try:
-        # إدخال المصطلحات فرادى لتجنب الضغط على الاتصال (SSL/Neon Timeout)
+        added_count = 0
         for item in terms:
             eng = item.get('en')
             if eng:
@@ -94,10 +99,10 @@ def receive_terms():
                     status='pending'
                 )
                 db.session.add(new_term)
-                # حفظ كل مصطلح أو تنفيذ commit دوري لتخفيف الحمل
-                db.session.commit()
+                added_count += 1
                 
-        return jsonify({'message': 'Terms received successfully'}), 201
+        db.session.commit()
+        return jsonify({'message': 'Terms received successfully', 'count': added_count}), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -130,6 +135,27 @@ def register():
         return redirect(url_for('index'))
         
     if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        if not username or not password:
+            flash('يرجى ملء جميع الحقول المطلوبة.', 'danger')
+            return render_template('login.html')
+            
+        if confirm_password and password != confirm_password:
+            flash('كلمة المرور وتأكيد كلمة المرور غير متطابقتين.', 'danger')
+            return render_template('login.html')
+            
+        if User.query.filter_by(username=username).first():
+            flash('اسم المستخدم مسجل مسبقاً، يرجى اختيار اسم آخر.', 'warning')
+            return render_template('login.html')
+            
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        new_user = User(username=username, password=hashed_password, role='reader')
+        db.session.add(new_user)
+        db.session.commit()
+        
         flash('Account created successfully! You can now login as a Reader.', 'success')
         return redirect(url_for('login'))
         
