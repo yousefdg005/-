@@ -200,7 +200,7 @@ def admin():
         return redirect(url_for('admin'))
         
     pending_terms = Term.query.filter(Term.status.in_(['pending', 'ai_suggested'])).order_by(Term.date.desc()).all()
-    approved_terms = Term.query.filter_by(status='approved').all()
+    approved_terms = Term.query.filter_by(status='approved').order_by(Term.en).all()
     new_incoming_count = Term.query.filter_by(status='pending').count()
     
     api_key, current_model = get_ai_config()
