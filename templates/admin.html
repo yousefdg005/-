@@ -76,7 +76,14 @@
 
 <!-- 📋 جدول مراجعة المصطلحات الواصلة والمعلقة -->
 <div class="mt-5 mb-5">
-    <h3 class="mb-4 gold-text" style="font-family: 'Amiri', serif;">📋 المصطلحات المعلقة (Pending Terms)</h3>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <h3 class="mb-0 gold-text" style="font-family: 'Amiri', serif;">📋 المصطلحات المعلقة (Pending Terms)</h3>
+            <span class="badge bg-secondary text-light px-3 py-2 rounded-pill fw-bold" style="font-size: 0.95rem;">
+                العدد: {{ pending_terms|length }} مصطلح
+            </span>
+        </div>
+    </div>
     
     <form action="/admin/bulk_action" method="POST" id="bulkForm">
         <div class="d-flex gap-3 mb-3">
@@ -95,12 +102,12 @@
                         <th style="width: 5%; padding: 15px; text-align: center;">
                             <input class="form-check-input" type="checkbox" id="selectAll" style="cursor: pointer; transform: scale(1.2);">
                         </th>
-                        <th style="width: 5%;">ID</th>
+                        <th style="width: 6%; text-align: center;">#</th>
                         <th style="width: 20%;">المصطلح الإنجليزي</th>
                         <th style="width: 20%;">المقابل العربي</th>
                         <th style="width: 15%;">المجال</th>
-                        <th style="width: 25%;">الشرح</th>
-                        <th style="width: 10%;">إجراء فردي</th>
+                        <th style="width: 24%;">الشرح</th>
+                        <th style="width: 10%; text-align: center;">إجراء فردي</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -109,13 +116,16 @@
                         <td style="padding: 15px; text-align: center;">
                             <input class="form-check-input term-checkbox" type="checkbox" name="term_ids" value="{{ term.id }}" style="cursor: pointer; transform: scale(1.2);">
                         </td>
-                        <td class="text-gray">{{ term.id }}</td>
+                        <td class="gold-text fw-bold text-center">
+                            {{ loop.index }}
+                            <small class="text-muted d-block" style="font-size: 0.7rem;">ID: {{ term.id }}</small>
+                        </td>
                         <td class="gold-text fw-bold" dir="ltr" style="text-align: left;">{{ term.en }}</td>
                         <td class="text-light fw-bold">{{ term.ar or '-' }}</td>
                         <td class="text-info fw-bold">{{ term.subject_field or '-' }}</td>
                         <td class="text-gray" style="font-size: 0.9rem;">{{ term.definition or '-' }}</td>
-                        <td>
-                            <div class="d-flex gap-2">
+                        <td style="text-align: center;">
+                            <div class="d-flex gap-2 justify-content-center">
                                 <a href="{{ url_for('approve_term', term_id=term.id) }}" class="btn btn-sm btn-success btn-custom" title="اعتماد">✅</a>
                                 <a href="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger btn-custom" title="حذف" onclick="return confirmAction('تأكيد الحذف؟')">🗑️</a>
                             </div>
@@ -135,7 +145,12 @@
 <!-- 📚 القاموس المحفوظ: المصطلحات المعتمدة -->
 <div class="mt-5 mb-5" id="approved-dictionary">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
-        <h3 class="gold-text mb-0" style="font-family: 'Amiri', serif;">📚 القاموس المحفوظ (المصطلحات المعتمدة)</h3>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <h3 class="gold-text mb-0" style="font-family: 'Amiri', serif;">📚 القاموس المحفوظ (المصطلحات المعتمدة)</h3>
+            <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold" style="font-size: 0.95rem;">
+                العدد الإجمالي: {{ approved_terms|length }} مصطلح
+            </span>
+        </div>
         <input type="search" id="approvedSearch" class="form-control" style="max-width: 360px;" placeholder="ابحث في القاموس المحفوظ...">
     </div>
 
@@ -147,13 +162,13 @@
             <table class="table table-dark-custom align-middle mb-0" id="approvedTable">
                 <thead class="thead-gold">
                     <tr>
-                        <th style="text-align: center;"><input type="checkbox" id="approvedSelectAll" aria-label="تحديد كل المصطلحات"></th>
-                        <th>ID</th>
-                        <th>المصطلح الإنجليزي</th>
-                        <th>المقابل العربي</th>
-                        <th>المجال</th>
-                        <th>الشرح</th>
-                        <th>إجراءات</th>
+                        <th style="text-align: center; width: 4%;"><input type="checkbox" id="approvedSelectAll" aria-label="تحديد كل المصطلحات"></th>
+                        <th style="text-align: center; width: 6%;">#</th>
+                        <th style="width: 20%;">المصطلح الإنجليزي</th>
+                        <th style="width: 20%;">المقابل العربي</th>
+                        <th style="width: 15%;">المجال</th>
+                        <th style="width: 25%;">الشرح</th>
+                        <th style="text-align: center; width: 10%;">إجراءات</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -162,12 +177,15 @@
                         <td style="text-align: center;">
                             <input type="checkbox" class="approved-checkbox" name="approved_term_ids" value="{{ term.id }}" aria-label="تحديد {{ term.en }}">
                         </td>
-                        <td>{{ term.id }}</td>
-                        <td class="approved-english" dir="ltr">{{ term.en }}</td>
+                        <td class="gold-text fw-bold text-center" style="font-size: 1.05rem;">
+                            {{ loop.index }}
+                            <small class="text-muted d-block" style="font-size: 0.7rem; font-weight: normal;">ID: {{ term.id }}</small>
+                        </td>
+                        <td class="approved-english" dir="ltr" style="text-align: left;">{{ term.en }}</td>
                         <td class="approved-arabic">{{ term.ar or '-' }}</td>
                         <td class="approved-subject">{{ term.subject_field or '-' }}</td>
                         <td class="approved-desc">{{ term.definition or '-' }}</td>
-                        <td>
+                        <td style="text-align: center;">
                             <details>
                                 <summary class="btn btn-sm btn-outline-warning">تعديل</summary>
                                 <form method="POST" action="{{ url_for('edit_term', term_id=term.id) }}" class="mt-2 p-2 bg-dark rounded">
