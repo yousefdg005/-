@@ -2,3 +2,5 @@
 .venv/
 .venv-1/
 __pycache__/
+instance/
+*.db

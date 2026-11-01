@@ -112,6 +112,7 @@ SETTING
 |--------|-------|------|-------------|
 | GET/POST | `/login` | Public | User login (rate-limited: 10/min) |
 | GET | `/logout` | Auth | Session logout |
+| GET/POST | `/account/password` | Any logged-in user | Change own password (requires current password) |
 | GET | `/dictionary` | Reader+ | Browse approved terms |
 | GET/POST | `/admin` | Admin | Dashboard: view/add terms |
 | POST | `/admin/save_settings` | Admin | Save AI model config to DB |
@@ -119,6 +120,8 @@ SETTING
 | GET | `/admin/approve/:id` | Admin | Approve single term |
 | POST | `/admin/edit/:id` | Admin | Edit a term's fields |
 | GET | `/admin/delete/:id` | Admin | Delete a term |
+| GET | `/admin/export/tbx` | Admin | Export approved terms as TBX (CAT tools) |
+| GET | `/admin/export/csv` | Admin | Export approved terms as CSV (Excel) |
 | POST | `/api/receive-terms` | Bearer Token | Ingest AI-extracted terms |
 
 ---
@@ -158,9 +161,11 @@ gunicorn app:app
 SECRET_KEY=your_strong_random_secret_key_here
 DATABASE_URL=postgresql://user:password@host/dbname
 INGEST_API_KEY=your_chosen_secure_token
+ADMIN_INITIAL_PASSWORD=a_strong_initial_password_for_the_admin_account
+READER_INITIAL_PASSWORD=a_strong_initial_password_for_the_reader_account
 ```
 
-> **After setup:** Log in with the default admin credentials created by `setup_db.py`, then immediately change the password from the admin panel.
+> **After setup:** Log in with the initial credentials created by `setup_db.py` (taken from the two password variables above), then immediately change each password via the **🔑 كلمة المرور** page in the navbar. `setup_db.py` refuses to run without these variables — there are no default passwords — and it never overwrites existing accounts.
 
 ---
 

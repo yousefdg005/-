@@ -165,9 +165,10 @@
         </div>
     </div>
 
-    <!-- النموذج محيط بالكامل بالجدول وأزرار الحذف لضمان عمل حذف المحدد بنجاح -->
+    <!-- نموذج الحذف الجماعي مستقل عن الجدول: يضيف السكربت معرفات المحدد كحقول مخفية عند الإرسال، لتفادي النماذج المتداخلة -->
     <form method="POST" action="{{ url_for('approved_bulk_delete') }}" id="approvedBulkForm" onsubmit="return confirmAction('هل أنت متأكد من حذف المصطلحات المحددة من القاموس المحفوظ؟')">
         <button type="submit" class="btn btn-danger mb-3">🗑️ حذف المحدد</button>
+    </form>
         
         <div class="table-responsive dark-panel shadow-lg rounded-3">
             <table class="table table-dark-custom align-middle mb-0" id="approvedTable">
@@ -186,7 +187,7 @@
                     {% for term in approved_terms %}
                     <tr class="approved-row">
                         <td style="text-align: center;">
-                            <input type="checkbox" class="approved-checkbox" name="approved_term_ids" value="{{ term.id }}" aria-label="تحديد {{ term.en }}">
+                            <input type="checkbox" class="approved-checkbox" value="{{ term.id }}" aria-label="تحديد {{ term.en }}">
                         </td>
                         <td class="gold-text fw-bold text-center" style="font-size: 1.05rem;">
                             {{ loop.index }}
@@ -216,7 +217,6 @@
                 </tbody>
             </table>
         </div>
-    </form>
 </div>
 
 <script>
@@ -226,6 +226,19 @@ document.addEventListener('DOMContentLoaded', function () {
         selectAll.addEventListener('change', function () {
             document.querySelectorAll('.approved-checkbox').forEach(function (box) { 
                 box.checked = selectAll.checked; 
+            });
+        });
+    }
+    const bulkForm = document.getElementById('approvedBulkForm');
+    if (bulkForm) {
+        bulkForm.addEventListener('submit', function () {
+            bulkForm.querySelectorAll('input[name="approved_term_ids"]').forEach(function (tag) { tag.remove(); });
+            document.querySelectorAll('#approvedTable .approved-checkbox:checked').forEach(function (box) {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'approved_term_ids';
+                hiddenInput.value = box.value;
+                bulkForm.appendChild(hiddenInput);
             });
         });
     }

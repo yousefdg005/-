@@ -171,6 +171,28 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+@app.route('/account/password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    if request.method == 'POST':
+        current_password = request.form.get('current_password', '')
+        new_password = request.form.get('new_password', '')
+        confirm_password = request.form.get('confirm_password', '')
+
+        if not bcrypt.check_password_hash(current_user.password, current_password):
+            flash('كلمة المرور الحالية غير صحيحة.', 'danger')
+        elif len(new_password) < 8:
+            flash('كلمة المرور الجديدة يجب أن تتكون من 8 أحرف على الأقل.', 'danger')
+        elif new_password != confirm_password:
+            flash('كلمة المرور الجديدة وتأكيدها غير متطابقين.', 'danger')
+        else:
+            current_user.password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+            db.session.commit()
+            flash('تم تغيير كلمة المرور بنجاح!', 'success')
+            return redirect(url_for('index'))
+
+    return render_template('change_password.html')
+
 @app.route('/dictionary')
 @login_required
 def dictionary():
