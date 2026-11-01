@@ -44,6 +44,7 @@
 - **Inline editing** — edit any approved term's EN/AR text, definition, or subject field directly in the dashboard.
 - **Bulk delete** approved terms when needed.
 - **Manual entry** — add terms directly without going through the AI pipeline.
+- **Dictionary export** — download the approved dictionary as **TBX** (ISO 30042, compatible with CAT tools such as SDL Trados, MemoQ, OmegaT) or **CSV** (Excel-friendly, UTF-8 with BOM).
 - **AI model settings** — configure OpenRouter API key and preferred LLM model, stored persistently in the database.
 
 ### 🤝 Platform Integration API

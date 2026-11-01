@@ -1,5 +1,9 @@
 import os
-from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
+import csv
+import io
+from datetime import datetime
+from xml.sax.saxutils import escape
+from flask import Flask, render_template, redirect, url_for, request, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_bcrypt import Bcrypt
@@ -344,6 +348,92 @@ def edit_term(term_id):
     db.session.commit()
     flash('Term updated.', 'success')
     return redirect(url_for('admin'))
+
+# --- تصدير القاموس المعتمد بصيغة CSV ---
+@app.route('/admin/export/csv')
+@login_required
+def export_csv():
+    if current_user.role != 'admin': return "Access Denied", 403
+
+    terms = Term.query.filter_by(status='approved').order_by(Term.en).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'English Term', 'Arabic Term', 'Subject Field', 'Definition', 'Date Added'])
+    for term in terms:
+        writer.writerow([
+            term.id,
+            term.en,
+            term.ar or '',
+            term.subject_field or '',
+            term.definition or '',
+            term.date.strftime('%Y-%m-%d') if term.date else ''
+        ])
+
+    # إضافة BOM حتى تظهر الحروف العربية بشكل صحيح عند فتح الملف في Excel
+    data = '\ufeff' + output.getvalue()
+    return send_file(
+        io.BytesIO(data.encode('utf-8')),
+        mimetype='text/csv; charset=utf-8',
+        as_attachment=True,
+        download_name=f'legal_dictionary_{datetime.now().strftime("%Y-%m-%d")}.csv'
+    )
+
+# --- تصدير القاموس المعتمد بصيغة TBX (ISO 30042) المتوافقة مع أدوات الترجمة ---
+@app.route('/admin/export/tbx')
+@login_required
+def export_tbx():
+    if current_user.role != 'admin': return "Access Denied", 403
+
+    terms = Term.query.filter_by(status='approved').order_by(Term.en).all()
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<!DOCTYPE martif PUBLIC "ISO 12200:1999A//DTD Martif plain//EN" "TBXcdv02.dtd">',
+        '<martif type="TBX" xml:lang="en">',
+        '  <martifHeader>',
+        '    <fileDesc>',
+        '      <titleStmt>',
+        '        <title>AI Legal Dictionary - Bilingual Legal Terms (EN-AR)</title>',
+        '      </titleStmt>',
+        '      <sourceDesc>',
+        f'        <p>Exported from AI Legal Dictionary platform on {today}</p>',
+        '      </sourceDesc>',
+        '    </fileDesc>',
+        '    <encodingDesc>',
+        '      <p type="XCSURI">TBXcdv02.xcs</p>',
+        '    </encodingDesc>',
+        '  </martifHeader>',
+        '  <text>',
+        '    <body>',
+    ]
+    for term in terms:
+        lines.append(f'      <termEntry id="c{term.id:06d}">')
+        if term.subject_field:
+            lines.append(f'        <descripGrp><descrip type="subjectField">{escape(term.subject_field)}</descrip></descripGrp>')
+        lines.append('        <langSet xml:lang="en">')
+        lines.append(f'          <tig><term>{escape(term.en)}</term></tig>')
+        lines.append('        </langSet>')
+        if term.ar:
+            lines.append('        <langSet xml:lang="ar">')
+            if term.definition:
+                lines.append(f'          <descripGrp><descrip type="definition">{escape(term.definition)}</descrip></descripGrp>')
+            lines.append(f'          <tig><term>{escape(term.ar)}</term></tig>')
+            lines.append('        </langSet>')
+        lines.append('      </termEntry>')
+    lines += [
+        '    </body>',
+        '  </text>',
+        '</martif>',
+    ]
+
+    return send_file(
+        io.BytesIO('\n'.join(lines).encode('utf-8')),
+        mimetype='application/xml',
+        as_attachment=True,
+        download_name=f'legal_dictionary_{today}.tbx'
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)

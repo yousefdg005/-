@@ -151,7 +151,18 @@
                 العدد الإجمالي: {{ approved_terms|length }} مصطلح
             </span>
         </div>
-        <input type="search" id="approvedSearch" class="form-control" style="max-width: 360px;" placeholder="ابحث في القاموس المحفوظ...">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div class="dropdown">
+                <button class="btn btn-warning dropdown-toggle fw-bold shadow-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    ⬇️ تصدير القاموس
+                </button>
+                <ul class="dropdown-menu dropdown-menu-dark shadow">
+                    <li><a class="dropdown-item" href="{{ url_for('export_tbx') }}">📦 TBX — لبرامج الترجمة (Trados / MemoQ / OmegaT)</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('export_csv') }}">📊 CSV — لفتحه في Excel</a></li>
+                </ul>
+            </div>
+            <input type="search" id="approvedSearch" class="form-control" style="max-width: 360px;" placeholder="ابحث في القاموس المحفوظ...">
+        </div>
     </div>
 
     <!-- النموذج محيط بالكامل بالجدول وأزرار الحذف لضمان عمل حذف المحدد بنجاح -->
