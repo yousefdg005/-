@@ -20,13 +20,15 @@ document.addEventListener('DOMContentLoaded', function() {
             let rows = document.querySelectorAll('.term-row');
             
             rows.forEach(function(row) {
-                // تحديث كلاسات البحث حسب الأعمدة الجديدة
-                let englishTerm = row.querySelector('.en-term').textContent.toLowerCase();
-                let arabicTerm = row.querySelector('.ar-term').textContent.toLowerCase();
-                let definition = row.querySelector('.definition-desc').textContent.toLowerCase();
-                let subject = row.querySelector('.subject-field').textContent.toLowerCase();
+                // تحديث كلاسات البحث حسب الأعمدة الجديدة بما فيها نصوص المصدر
+                let englishTerm = row.querySelector('.en-term') ? row.querySelector('.en-term').textContent.toLowerCase() : '';
+                let arabicTerm = row.querySelector('.ar-term') ? row.querySelector('.ar-term').textContent.toLowerCase() : '';
+                let definition = row.querySelector('.definition-desc') ? row.querySelector('.definition-desc').textContent.toLowerCase() : '';
+                let subject = row.querySelector('.subject-field') ? row.querySelector('.subject-field').textContent.toLowerCase() : '';
+                let sourceEn = row.querySelector('.source-en') ? row.querySelector('.source-en').textContent.toLowerCase() : '';
+                let sourceAr = row.querySelector('.source-ar') ? row.querySelector('.source-ar').textContent.toLowerCase() : '';
                 
-                if (englishTerm.includes(filter) || arabicTerm.includes(filter) || definition.includes(filter) || subject.includes(filter)) {
+                if (englishTerm.includes(filter) || arabicTerm.includes(filter) || definition.includes(filter) || subject.includes(filter) || sourceEn.includes(filter) || sourceAr.includes(filter)) {
                     row.style.display = ""; 
                 } else {
                     row.style.display = "none";
