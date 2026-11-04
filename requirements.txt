@@ -3,6 +3,7 @@ Flask-SQLAlchemy
 Flask-Login
 Flask-Bcrypt
 Flask-Limiter
+Flask-WTF
 psycopg2-binary
 psycopg[binary]
 requests

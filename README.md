@@ -49,6 +49,7 @@
 
 ### 🤝 Platform Integration API
 - A dedicated REST endpoint (`/api/receive-terms`) accepts batches of AI-extracted terms from the companion processing tool ([AI Legal Workspace](https://github.com/yousefdg005/qwqw)), enabling a seamless, automated terminology pipeline.
+- Accepted fields per term: `en`, `ar`, `definition`, `subject field`, `source_text_en`, `source_text_ar` (the source sentences the term was extracted from — shown to admins for review context).
 
 ---
 
@@ -115,14 +116,15 @@ SETTING
 | GET/POST | `/account/password` | Any logged-in user | Change own password (requires current password) |
 | GET | `/dictionary` | Reader+ | Browse approved terms |
 | GET/POST | `/admin` | Admin | Dashboard: view/add terms |
-| POST | `/admin/save_settings` | Admin | Save AI model config to DB |
+| POST | `/admin/save_settings` | Admin | Save AI model config to DB (key never redisplayed) |
 | POST | `/admin/bulk_action` | Admin | Bulk approve/delete pending terms |
-| GET | `/admin/approve/:id` | Admin | Approve single term |
+| POST | `/admin/approve/:id` | Admin | Approve single term |
 | POST | `/admin/edit/:id` | Admin | Edit a term's fields |
-| GET | `/admin/delete/:id` | Admin | Delete a term |
+| POST | `/admin/delete/:id` | Admin | Delete a term |
+| POST | `/admin/deduplicate` | Admin | Remove duplicate terms (keeps the oldest of each group) |
 | GET | `/admin/export/tbx` | Admin | Export approved terms as TBX (CAT tools) |
 | GET | `/admin/export/csv` | Admin | Export approved terms as CSV (Excel) |
-| POST | `/api/receive-terms` | Bearer Token | Ingest AI-extracted terms |
+| POST | `/api/receive-terms` | Bearer Token | Ingest AI-extracted terms (rate-limited: 60/hour) |
 
 ---
 
@@ -163,6 +165,7 @@ DATABASE_URL=postgresql://user:password@host/dbname
 INGEST_API_KEY=your_chosen_secure_token
 ADMIN_INITIAL_PASSWORD=a_strong_initial_password_for_the_admin_account
 READER_INITIAL_PASSWORD=a_strong_initial_password_for_the_reader_account
+SESSION_COOKIE_SECURE=true
 ```
 
 > **After setup:** Log in with the initial credentials created by `setup_db.py` (taken from the two password variables above), then immediately change each password via the **🔑 كلمة المرور** page in the navbar. `setup_db.py` refuses to run without these variables — there are no default passwords — and it never overwrites existing accounts.
@@ -177,6 +180,7 @@ Flask-SQLAlchemy     # ORM for PostgreSQL
 Flask-Login          # Session-based authentication
 Flask-Bcrypt         # Password hashing
 Flask-Limiter        # Rate limiting
+Flask-WTF            # CSRF protection (all state-changing POSTs)
 psycopg2-binary      # PostgreSQL driver
 python-dotenv        # .env file support
 gunicorn             # Production WSGI server

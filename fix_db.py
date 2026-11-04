@@ -21,15 +21,26 @@ with app.app_context():
     try:
         # إضافة عمود subject_field الجديد
         db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS subject_field VARCHAR(150) DEFAULT 'قانون عام';"))
-        
+
         # التأكد من وجود created_at
         db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"))
-        
+
         db.session.commit()
         print("✅ New columns added successfully!")
     except Exception as e:
         db.session.rollback()
         print(f"Note on adding columns: {e}")
-        
+
+    try:
+        # إضافة عمودي نص المصدر (الجملتان التي استُخرج منهما المصطلح) الواردين من منصة الاستخراج
+        db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS source_text_en TEXT;"))
+        db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS source_text_ar TEXT;"))
+
+        db.session.commit()
+        print("✅ Source text columns added successfully!")
+    except Exception as e:
+        db.session.rollback()
+        print(f"Note on adding source text columns: {e}")
+
     db.create_all()
     print("✅ Schema update process complete!")

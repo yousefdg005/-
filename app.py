@@ -1,6 +1,8 @@
 import os
 import csv
 import io
+import re
+import unicodedata
 from datetime import datetime
 from xml.sax.saxutils import escape
 from flask import Flask, render_template, redirect, url_for, request, flash, jsonify, send_file
@@ -9,25 +11,34 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from flask_bcrypt import Bcrypt
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf import CSRFProtect
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'dictionary-secure-fallback-key-2026' 
+
 db_url = os.getenv('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# تقوية كوكيز الجلسة: SameSite يمنع إرسالها من مواقع أخرى، وSecure عند التشغيل خلف HTTPS
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+app.config['WTF_CSRF_TIME_LIMIT'] = None
 
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "50 per hour"])
+# لا حد عام على كل المسارات — الحدود تُضبط لكل مسار حتى لا يُخنق تصفح القاموس وسحب المصطلحات
+limiter = Limiter(get_remote_address, app=app, default_limits=[])
+csrf = CSRFProtect(app)
 
 # --- الجداول (Database Models) ---
 class User(db.Model, UserMixin):
@@ -43,6 +54,9 @@ class Term(db.Model):
     ar = db.Column(db.String(255), nullable=True)
     definition = db.Column(db.Text, nullable=True)
     subject_field = db.Column(db.String(150), nullable=True, default="قانون عام") # إضافة عمود المجال
+    # نصوص المصدر التي استُخرج منها المصطلح (تُرسل تلقائياً من منصة الاستخراج AI Legal Workspace)
+    source_text_en = db.Column(db.Text, nullable=True)
+    source_text_ar = db.Column(db.Text, nullable=True)
     date = db.Column(db.DateTime, default=db.func.now())
     status = db.Column(db.String(50), default='pending')
     created_at = db.Column(db.DateTime, server_default=db.func.now())
@@ -56,6 +70,24 @@ class Setting(db.Model):
 # إنشاء الجداول تلقائياً عند الإقلاع
 with app.app_context():
     db.create_all()
+    # ترحيل تلقائي خفيف: إضافة أعمدة نصوص المصدر لقواعد بيانات قائمة
+    # (db.create_all() لا يضيف أعمدة للجداول الموجودة مسبقاً — ALTER هنا آمن ومتكرر الأمان idempotent)
+    try:
+        if db.engine.name == 'sqlite':
+            cols = [row[1] for row in db.session.execute(text("PRAGMA table_info(term)")).fetchall()]
+            if 'source_text_en' not in cols:
+                db.session.execute(text("ALTER TABLE term ADD COLUMN source_text_en TEXT;"))
+            if 'source_text_ar' not in cols:
+                db.session.execute(text("ALTER TABLE term ADD COLUMN source_text_ar TEXT;"))
+        else:  # PostgreSQL (Neon/Render)
+            db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS subject_field VARCHAR(150) DEFAULT 'قانون عام';"))
+            db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS source_text_en TEXT;"))
+            db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS source_text_ar TEXT;"))
+            db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS date TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"))
+            db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -70,8 +102,17 @@ def get_ai_config():
     model = model_setting.value if model_setting else 'openai/gpt-3.5-turbo'
     return api_key, model
 
+# مفتاح تطبيع المصطلحات لكشف التكرارات (يتجاهل حالة الأحرف والترقيم والمسافات الزائدة)
+def _term_key(value):
+    value = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    value = re.sub(r"[\W_]+", " ", value, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", value).strip()
+
 # --- API استقبال المصطلحات من المنصة (Streamlit) ---
+# إعفاء من CSRF لأن المصادقة هنا عبر Bearer Token وليس كوكيز الجلسة
+@csrf.exempt
 @app.route('/api/receive-terms', methods=['POST'])
+@limiter.limit("60 per hour")
 def receive_terms():
     auth_header = request.headers.get('Authorization')
     ingest_key = os.environ.get('INGEST_API_KEY')
@@ -100,6 +141,8 @@ def receive_terms():
                     ar=item.get('ar'),
                     definition=item.get('definition'),
                     subject_field=item.get('subject field', 'قانون عام'),
+                    source_text_en=item.get('source_text_en'),
+                    source_text_ar=item.get('source_text_ar'),
                     status='pending'
                 )
                 db.session.add(new_term)
@@ -134,6 +177,7 @@ def login():
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit("5 per hour", methods=['POST'])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
@@ -212,12 +256,16 @@ def admin():
         ar_term = request.form.get('ar')
         definition = request.form.get('definition')
         subject_field = request.form.get('subject_field', 'قانون عام')
-        
+        source_text_en = request.form.get('source_text_en')
+        source_text_ar = request.form.get('source_text_ar')
+
         new_term = Term(
             en=en_term,
             ar=ar_term,
             definition=definition,
             subject_field=subject_field,
+            source_text_en=source_text_en,
+            source_text_ar=source_text_ar,
             status='pending'
         )
         db.session.add(new_term)
@@ -235,7 +283,7 @@ def admin():
                            pending_terms=pending_terms, 
                            approved_terms=approved_terms,
                            new_incoming_count=new_incoming_count,
-                           openrouter_api_key=api_key,
+                           has_api_key=bool(api_key),
                            current_model=current_model)
 
 @app.route('/admin/save_settings', methods=['POST'])
@@ -246,12 +294,13 @@ def save_settings():
     api_key = request.form.get('openrouter_api_key', '').strip()
     selected_model = request.form.get('openrouter_model', 'openai/gpt-3.5-turbo')
     
-    key_setting = Setting.query.filter_by(key='openrouter_api_key').first()
-    if not key_setting:
-        key_setting = Setting(key='openrouter_api_key', value=api_key)
-        db.session.add(key_setting)
-    else:
-        key_setting.value = api_key
+    # المفتاح لا يُحفظ إلا إذا أُدخل مفتاح جديد — الواجهة لا تعرض المفتاح المحفوظ أبداً
+    if api_key:
+        key_setting = Setting.query.filter_by(key='openrouter_api_key').first()
+        if not key_setting:
+            db.session.add(Setting(key='openrouter_api_key', value=api_key))
+        else:
+            key_setting.value = api_key
         
     model_setting = Setting.query.filter_by(key='openrouter_model').first()
     if not model_setting:
@@ -329,7 +378,7 @@ def approved_bulk_delete():
         
     return redirect(url_for('admin'))
 
-@app.route('/admin/approve/<int:term_id>')
+@app.route('/admin/approve/<int:term_id>', methods=['POST'])
 @login_required
 def approve_term(term_id):
     if current_user.role != 'admin': return "Access Denied", 403
@@ -339,7 +388,7 @@ def approve_term(term_id):
     flash('Term approved and published!', 'success')
     return redirect(url_for('admin'))
 
-@app.route('/admin/delete/<int:term_id>')
+@app.route('/admin/delete/<int:term_id>', methods=['POST'])
 @login_required
 def delete_term(term_id):
     if current_user.role != 'admin': return "Access Denied", 403
@@ -349,14 +398,41 @@ def delete_term(term_id):
     flash('Term deleted.', 'warning')
     return redirect(url_for('admin'))
 
-@app.route('/admin/deduplicate_terms', methods=['POST'])
+@app.route('/admin/deduplicate', methods=['POST'])
 @login_required
 def deduplicate_terms():
-    if current_user.role != 'admin': 
+    if current_user.role != 'admin':
         return "Access Denied", 403
-    
-    # هنا يتم وضع منطق إزالة التكرار أو استدعاء معالج الذكاء الاصطناعي
-    flash('تم تنفيذ عملية حذف المصطلحات المكررة بنجاح.', 'info')
+
+    # إزالة تكرار محلية حتمية: الاحتفاظ بالأقدم (أصغر id) لكل مفتاح تطبيعي
+    approved = Term.query.filter_by(status='approved').order_by(Term.id).all()
+    kept_keys = set()
+    dup_approved = []
+    for term in approved:
+        key = _term_key(term.en)
+        if not key or key in kept_keys:
+            dup_approved.append(term)
+        else:
+            kept_keys.add(key)
+
+    # المعلّق المطابق لمعتمد أصلاً يُحذف، ثم تُزال تكرارات المعلقين فيما بينهم
+    pending = Term.query.filter(Term.status.in_(['pending', 'ai_suggested'])).order_by(Term.id).all()
+    dup_pending = []
+    seen_pending = set()
+    for term in pending:
+        key = _term_key(term.en)
+        if not key or key in kept_keys or key in seen_pending:
+            dup_pending.append(term)
+        else:
+            seen_pending.add(key)
+
+    for term in dup_approved + dup_pending:
+        db.session.delete(term)
+    db.session.commit()
+
+    total = len(dup_approved) + len(dup_pending)
+    category = 'success' if total else 'info'
+    flash(f'اكتملت مراجعة التكرارات: حُذف {len(dup_approved)} من المعتمد و{len(dup_pending)} من المعلق.', category)
     return redirect(url_for('admin'))
 
 @app.route('/admin/edit/<int:term_id>', methods=['POST'])
@@ -369,6 +445,8 @@ def edit_term(term_id):
     term.ar = request.form.get('ar')
     term.definition = request.form.get('definition')
     term.subject_field = request.form.get('subject_field')
+    term.source_text_en = request.form.get('source_text_en')
+    term.source_text_ar = request.form.get('source_text_ar')
     db.session.commit()
     flash('Term updated.', 'success')
     return redirect(url_for('admin'))
