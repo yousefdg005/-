@@ -26,6 +26,12 @@ if db_url and db_url.startswith("postgres://"):
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# إعدادات حوض الاتصال لدعم السيرفرليس (Neon) وتفادي قطع اتصال SSL عند الخمول
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+    'pool_timeout': 30,
+}
 # تقوية كوكيز الجلسة: SameSite يمنع إرسالها من مواقع أخرى، وSecure عند التشغيل خلف HTTPS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
@@ -132,24 +138,46 @@ def receive_terms():
         return jsonify({'error': 'Terms payload must be a list'}), 400
     
     try:
+        # فحص استباقي للمصطلحات المسجلة مسبقاً (معتمدة أو معلقة) لمنع التكرار اللحظي
+        existing_rows = db.session.query(Term.en).all()
+        existing_keys = {_term_key(r[0]) for r in existing_rows if r[0]}
+
+        seen_in_batch = set()
         added_count = 0
+        skipped_count = 0
+
         for item in terms:
-            eng = item.get('en')
-            if eng:
-                new_term = Term(
-                    en=eng,
-                    ar=item.get('ar'),
-                    definition=item.get('definition'),
-                    subject_field=item.get('subject field', 'قانون عام'),
-                    source_text_en=item.get('source_text_en'),
-                    source_text_ar=item.get('source_text_ar'),
-                    status='pending'
-                )
-                db.session.add(new_term)
-                added_count += 1
-                
+            eng = str(item.get('en') or '').strip()
+            if not eng:
+                continue
+
+            norm_key = _term_key(eng)
+            # إذا كان المصطلح موجوداً مسبقاً في القاموس أو تكرر في نفس الدفعة، يتم تجاوزه
+            if not norm_key or norm_key in existing_keys or norm_key in seen_in_batch:
+                skipped_count += 1
+                continue
+
+            seen_in_batch.add(norm_key)
+            existing_keys.add(norm_key)
+
+            new_term = Term(
+                en=eng,
+                ar=str(item.get('ar') or '').strip(),
+                definition=str(item.get('definition') or '').strip(),
+                subject_field=str(item.get('subject field') or 'قانون عام').strip(),
+                source_text_en=str(item.get('source_text_en') or item.get('source text en') or '').strip(),
+                source_text_ar=str(item.get('source_text_ar') or item.get('source text ar') or '').strip(),
+                status='pending'
+            )
+            db.session.add(new_term)
+            added_count += 1
+
         db.session.commit()
-        return jsonify({'message': 'Terms received successfully', 'count': added_count}), 201
+        return jsonify({
+            'message': 'Terms processed successfully',
+            'added_count': added_count,
+            'skipped_duplicate_count': skipped_count
+        }), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
