@@ -2,9 +2,10 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
     <h2 class="fw-bold text-gold mb-2 mb-md-0">Admin Dashboard</h2>
-    <a href="{{ url_for('deduplicate_ai') }}" class="btn btn-warning fw-bold shadow-sm" onclick="return confirmAction('Run OpenRouter AI to scan and auto-delete duplicate terms?');">
-        🧹 Run AI Deduplication
-    </a>
+    <form method="POST" action="{{ url_for('deduplicate_terms') }}" onsubmit="return confirmAction('حذف المصطلحات المتطابقة تلقائياً؟ سيُحتفظ بالأقدم في كل مجموعة.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-warning fw-bold shadow-sm">🧹 حذف المصطلحات المكررة</button>
+    </form>
 </div>
 
 <!-- 🔔 إشعار المصطلحات الجديدة الواصلة من المنصة -->
@@ -25,10 +26,11 @@
     </div>
     <div class="card-body p-4">
         <form method="POST" action="{{ url_for('save_settings') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label fw-bold text-muted">OpenRouter API Key</label>
-                    <input type="password" name="openrouter_api_key" value="{{ openrouter_api_key }}" class="form-control" placeholder="sk-or-v1-xxxxxxxx..." required>
+                    <input type="password" name="openrouter_api_key" class="form-control" placeholder="{{ '🔑 المفتاح محفوظ — أدخل مفتاحاً جديداً لاستبداله' if has_api_key else 'sk-or-v1-xxxxxxxx...' }}">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-bold text-muted">Select AI Model</label>
@@ -53,6 +55,7 @@
     <div class="card-body p-4">
         <h5 class="text-success mb-3 fw-bold">➕ Add New Term Manually</h5>
         <form method="POST" action="{{ url_for('admin') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row g-3">
                 <div class="col-md-2">
                     <input type="text" name="en" class="form-control bg-light" placeholder="English Term" required>
@@ -68,6 +71,14 @@
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-success w-100 btn-custom">Add Term</button>
+                </div>
+            </div>
+            <div class="row g-3 mt-2">
+                <div class="col-md-6">
+                    <textarea name="source_text_en" class="form-control bg-light" dir="ltr" rows="2" placeholder="EN Source Text — الجملة الإنجليزية التي استُخرج منها المصطلح (اختياري)"></textarea>
+                </div>
+                <div class="col-md-6">
+                    <textarea name="source_text_ar" class="form-control bg-light" dir="rtl" rows="2" placeholder="AR Source Text — الجملة العربية التي استُخرج منها المصطلح (اختياري)"></textarea>
                 </div>
             </div>
         </form>
@@ -86,6 +97,7 @@
     </div>
     
     <form action="/admin/bulk_action" method="POST" id="bulkForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="d-flex gap-3 mb-3">
             <button type="submit" name="action" value="approve" class="btn btn-success btn-custom" onclick="return confirmAction('هل أنت متأكد من اعتماد جميع المصطلحات المحددة؟')">
                 ✅ اعتماد المحدد
@@ -102,11 +114,13 @@
                         <th style="width: 5%; padding: 15px; text-align: center;">
                             <input class="form-check-input" type="checkbox" id="selectAll" style="cursor: pointer; transform: scale(1.2);">
                         </th>
-                        <th style="width: 6%; text-align: center;">#</th>
-                        <th style="width: 20%;">المصطلح الإنجليزي</th>
-                        <th style="width: 20%;">المقابل العربي</th>
-                        <th style="width: 15%;">المجال</th>
-                        <th style="width: 24%;">الشرح</th>
+                        <th style="width: 5%; text-align: center;">#</th>
+                        <th style="width: 15%;">المصطلح الإنجليزي</th>
+                        <th style="width: 15%;">المقابل العربي</th>
+                        <th style="width: 10%;">المجال</th>
+                        <th style="width: 15%;">الشرح</th>
+                        <th style="width: 15%;">النص المصدر EN</th>
+                        <th style="width: 15%;">النص المصدر AR</th>
                         <th style="width: 10%; text-align: center;">إجراء فردي</th>
                     </tr>
                 </thead>
@@ -124,16 +138,26 @@
                         <td class="text-light fw-bold">{{ term.ar or '-' }}</td>
                         <td class="text-info fw-bold">{{ term.subject_field or '-' }}</td>
                         <td class="text-gray" style="font-size: 0.9rem;">{{ term.definition or '-' }}</td>
+                        <td class="text-muted" style="font-size: 0.85rem;" dir="ltr">
+                            {% if term.source_text_en %}
+                            <div style="text-align: left; line-height: 1.5;">{{ term.source_text_en }}</div>
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="text-muted" style="font-size: 0.85rem;" dir="rtl">
+                            {% if term.source_text_ar %}
+                            <div style="line-height: 1.5;">{{ term.source_text_ar }}</div>
+                            {% else %}-{% endif %}
+                        </td>
                         <td style="text-align: center;">
                             <div class="d-flex gap-2 justify-content-center">
-                                <a href="{{ url_for('approve_term', term_id=term.id) }}" class="btn btn-sm btn-success btn-custom" title="اعتماد">✅</a>
-                                <a href="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger btn-custom" title="حذف" onclick="return confirmAction('تأكيد الحذف؟')">🗑️</a>
+                                <button type="submit" formaction="{{ url_for('approve_term', term_id=term.id) }}" class="btn btn-sm btn-success btn-custom" title="اعتماد" onclick="return confirmAction('اعتماد هذا المصطلح؟')">✅</button>
+                                <button type="submit" formaction="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger btn-custom" title="حذف" onclick="return confirmAction('تأكيد الحذف؟')">🗑️</button>
                             </div>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center py-4 text-gray">لا توجد مصطلحات معلقة حالياً.</td>
+                        <td colspan="9" class="text-center py-4 text-gray">لا توجد مصطلحات معلقة حالياً.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -167,6 +191,7 @@
 
     <!-- نموذج الحذف الجماعي مستقل عن الجدول: يضيف السكربت معرفات المحدد كحقول مخفية عند الإرسال، لتفادي النماذج المتداخلة -->
     <form method="POST" action="{{ url_for('approved_bulk_delete') }}" id="approvedBulkForm" onsubmit="return confirmAction('هل أنت متأكد من حذف المصطلحات المحددة من القاموس المحفوظ؟')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-danger mb-3">🗑️ حذف المحدد</button>
     </form>
         
@@ -175,11 +200,13 @@
                 <thead class="thead-gold">
                     <tr>
                         <th style="text-align: center; width: 4%;"><input type="checkbox" id="approvedSelectAll" aria-label="تحديد كل المصطلحات"></th>
-                        <th style="text-align: center; width: 6%;">#</th>
-                        <th style="width: 20%;">المصطلح الإنجليزي</th>
-                        <th style="width: 20%;">المقابل العربي</th>
-                        <th style="width: 15%;">المجال</th>
-                        <th style="width: 25%;">الشرح</th>
+                        <th style="text-align: center; width: 5%;">#</th>
+                        <th style="width: 13%;">المصطلح الإنجليزي</th>
+                        <th style="width: 13%;">المقابل العربي</th>
+                        <th style="width: 10%;">المجال</th>
+                        <th style="width: 15%;">الشرح</th>
+                        <th style="width: 14%;">النص المصدر EN</th>
+                        <th style="width: 14%;">النص المصدر AR</th>
                         <th style="text-align: center; width: 10%;">إجراءات</th>
                     </tr>
                 </thead>
@@ -196,23 +223,39 @@
                         <td class="approved-english" dir="ltr" style="text-align: left;">{{ term.en }}</td>
                         <td class="approved-arabic">{{ term.ar or '-' }}</td>
                         <td class="approved-subject">{{ term.subject_field or '-' }}</td>
-                        <td class="approved-desc">{{ term.definition or '-' }}</td>
+                        <td class="approved-desc" style="font-size: 0.9rem;">{{ term.definition or '-' }}</td>
+                        <td class="text-muted" style="font-size: 0.85rem;" dir="ltr">
+                            {% if term.source_text_en %}
+                            <div style="text-align: left; line-height: 1.5;">{{ term.source_text_en }}</div>
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="text-muted" style="font-size: 0.85rem;" dir="rtl">
+                            {% if term.source_text_ar %}
+                            <div style="line-height: 1.5;">{{ term.source_text_ar }}</div>
+                            {% else %}-{% endif %}
+                        </td>
                         <td style="text-align: center;">
                             <details>
                                 <summary class="btn btn-sm btn-outline-warning">تعديل</summary>
                                 <form method="POST" action="{{ url_for('edit_term', term_id=term.id) }}" class="mt-2 p-2 bg-dark rounded">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input class="form-control mb-2" name="en" value="{{ term.en }}" required placeholder="English Term">
                                     <input class="form-control mb-2" name="ar" value="{{ term.ar or '' }}" placeholder="المقابل العربي">
                                     <input class="form-control mb-2" name="subject_field" value="{{ term.subject_field or '' }}" placeholder="المجال">
                                     <textarea class="form-control mb-2" name="definition" placeholder="الشرح">{{ term.definition or '' }}</textarea>
+                                    <textarea class="form-control mb-2" name="source_text_en" dir="ltr" rows="2" placeholder="نص المصدر الإنجليزي (en Source text)">{{ term.source_text_en or '' }}</textarea>
+                                    <textarea class="form-control mb-2" name="source_text_ar" dir="rtl" rows="2" placeholder="نص المصدر العربي (ar Source text)">{{ term.source_text_ar or '' }}</textarea>
                                     <button class="btn btn-sm btn-warning w-100" type="submit">حفظ التعديل</button>
                                 </form>
                             </details>
-                            <a href="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger mt-2" onclick="return confirmAction('هل أنت متأكد من حذف المصطلح من القاموس؟')">حذف</a>
+                            <form method="POST" action="{{ url_for('delete_term', term_id=term.id) }}" style="display:inline;" onsubmit="return confirmAction('هل أنت متأكد من حذف المصطلح من القاموس؟')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger mt-2">حذف</button>
+                            </form>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="7" class="text-center py-4 text-gray">لا توجد مصطلحات معتمدة في القاموس بعد.</td></tr>
+                    <tr><td colspan="9" class="text-center py-4 text-gray">لا توجد مصطلحات معتمدة في القاموس بعد.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
