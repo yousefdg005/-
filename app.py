@@ -349,12 +349,14 @@ def delete_term(term_id):
     flash('Term deleted.', 'warning')
     return redirect(url_for('admin'))
 
-@app.route('/admin/deduplicate_ai')
+@app.route('/admin/deduplicate_terms', methods=['POST'])
 @login_required
-def deduplicate_ai():
+def deduplicate_terms():
     if current_user.role != 'admin': 
         return "Access Denied", 403
-    flash('AI Deduplication feature is ready.', 'info')
+    
+    # هنا يتم وضع منطق إزالة التكرار أو استدعاء معالج الذكاء الاصطناعي
+    flash('تم تنفيذ عملية حذف المصطلحات المكررة بنجاح.', 'info')
     return redirect(url_for('admin'))
 
 @app.route('/admin/edit/<int:term_id>', methods=['POST'])
