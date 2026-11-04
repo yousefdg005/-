@@ -479,7 +479,7 @@ def edit_term(term_id):
     flash('Term updated.', 'success')
     return redirect(url_for('admin'))
 
-# --- تصدير القاموس المعتمد بصيغة CSV ---
+# --- تصدير القاموس المعتمد بصيغة CSV (UTF-8 مع BOM) ---
 @app.route('/admin/export/csv')
 @login_required
 def export_csv():
@@ -489,24 +489,107 @@ def export_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'English Term', 'Arabic Term', 'Subject Field', 'Definition', 'Date Added'])
-    for term in terms:
+    writer.writerow(['#', 'ID', 'English Term (en)', 'Arabic Term (ar)', 'Subject Field', 'Definition', 'Source Text EN', 'Source Text AR', 'Date Added'])
+    for idx, term in enumerate(terms, start=1):
         writer.writerow([
+            idx,
             term.id,
             term.en,
             term.ar or '',
             term.subject_field or '',
             term.definition or '',
+            term.source_text_en or '',
+            term.source_text_ar or '',
             term.date.strftime('%Y-%m-%d') if term.date else ''
         ])
 
-    # إضافة BOM حتى تظهر الحروف العربية بشكل صحيح عند فتح الملف في Excel
+    # إضافة BOM (\ufeff) حتى تظهر الحروف العربية في Excel بشكل سليم 100%
     data = '\ufeff' + output.getvalue()
     return send_file(
-        io.BytesIO(data.encode('utf-8')),
+        io.BytesIO(data.encode('utf-8-sig')),
         mimetype='text/csv; charset=utf-8',
         as_attachment=True,
         download_name=f'legal_dictionary_{datetime.now().strftime("%Y-%m-%d")}.csv'
+    )
+
+# --- تصدير القاموس المعتمد بصيغة Excel (XLSX / XLS) ---
+@app.route('/admin/export/excel')
+@app.route('/admin/export/xls')
+@login_required
+def export_excel():
+    if current_user.role != 'admin': return "Access Denied", 403
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    terms = Term.query.filter_by(status='approved').order_by(Term.en).all()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Legal Dictionary"
+
+    headers = [
+        '#', 'ID', 'English Term (en)', 'Arabic Term (ar)',
+        'Subject Field', 'Definition', 'Source Text EN', 'Source Text AR', 'Date Added'
+    ]
+    ws.append(headers)
+
+    # تنسيق رأس الجدول
+    header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='1E293B', end_color='1E293B', fill_type='solid')
+    header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    for col_num in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+
+    # إضافة صفوف المصطلحات المعتمدة
+    for idx, term in enumerate(terms, start=1):
+        ws.append([
+            idx,
+            term.id,
+            term.en,
+            term.ar or '',
+            term.subject_field or '',
+            term.definition or '',
+            term.source_text_en or '',
+            term.source_text_ar or '',
+            term.date.strftime('%Y-%m-%d') if term.date else ''
+        ])
+
+    # محاذاة البيانات وتفعيل التفاف النص (Wrap text)
+    align_left = Alignment(horizontal='left', vertical='top', wrap_text=True)
+    align_right = Alignment(horizontal='right', vertical='top', wrap_text=True)
+    align_center = Alignment(horizontal='center', vertical='top')
+
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=len(headers)):
+        row[0].alignment = align_center # #
+        row[1].alignment = align_center # ID
+        row[2].alignment = align_left   # en
+        row[3].alignment = align_right  # ar
+        row[4].alignment = align_center # subject_field
+        row[5].alignment = align_right  # definition
+        row[6].alignment = align_left   # source_text_en
+        row[7].alignment = align_right  # source_text_ar
+        row[8].alignment = align_center # date
+
+    # تحديد عرض الأعمدة
+    col_widths = {1: 8, 2: 8, 3: 25, 4: 25, 5: 22, 6: 40, 7: 40, 8: 40, 9: 14}
+    for col_idx, width in col_widths.items():
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+    excel_output = io.BytesIO()
+    wb.save(excel_output)
+    excel_output.seek(0)
+
+    return send_file(
+        excel_output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'legal_dictionary_{datetime.now().strftime("%Y-%m-%d")}.xlsx'
     )
 
 # --- تصدير القاموس المعتمد بصيغة TBX (ISO 30042) المتوافقة مع أدوات الترجمة ---

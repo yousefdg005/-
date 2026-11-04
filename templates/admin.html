@@ -181,8 +181,9 @@
                     ⬇️ تصدير القاموس
                 </button>
                 <ul class="dropdown-menu dropdown-menu-dark shadow">
+                    <li><a class="dropdown-item" href="{{ url_for('export_excel') }}">📥 Excel (.xlsx / .xls) — مصنف إكسل</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('export_csv') }}">📊 CSV (UTF-8) — متوافق مع Excel</a></li>
                     <li><a class="dropdown-item" href="{{ url_for('export_tbx') }}">📦 TBX — لبرامج الترجمة (Trados / MemoQ / OmegaT)</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('export_csv') }}">📊 CSV — لفتحه في Excel</a></li>
                 </ul>
             </div>
             <input type="search" id="approvedSearch" class="form-control" style="max-width: 360px;" placeholder="ابحث في القاموس المحفوظ...">
