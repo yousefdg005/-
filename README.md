@@ -1,8 +1,10 @@
 <div align="center">
 
-# 🏛️ Legal Dictionary — قاموس المصطلحات القانونية
-### *منصة إدارة قاعدة المصطلحات والاعتماد البشري والتصدير*
+# 🦉 LexTerm — Legal Dictionary
+### *قاموس المصطلحات القانونية*
 #### Platform B — الواجهة الخلفية للمنظومة المتكاملة
+
+<img src="static/img/logo.jpg" alt="LexTerm Logo" width="180">
 
 ---
 
@@ -39,7 +41,7 @@
 
 ## 1. نظرة عامة
 
-**Legal Dictionary** هو تطبيق ويب مبني بـ **Python + Flask**، يعمل كقاعدة بيانات ونظام إدارة ثنائي اللغة (إنجليزي ↔ عربي) لقواعد المصطلحات القانونية. يستقبل هذا التطبيق المصطلحات المستخرجة آلياً من [منصة AI Legal Workspace](https://github.com/yousefdg005/qwqw) عبر REST API مؤمّن، ويضعها في قائمة انتظار للمراجعة البشرية، ثم يتيح تصدير المصطلحات المعتمدة بصيغ متعددة متوافقة مع أدوات الترجمة بمساعدة الحاسوب (CAT Tools).
+**LexTerm** هو تطبيق ويب مبني بـ **Python + Flask**، يعمل كقاعدة بيانات ونظام إدارة ثنائي اللغة (إنجليزي ↔ عربي) لقواعد المصطلحات القانونية. يستقبل هذا التطبيق المصطلحات المستخرجة آلياً من [منصة LexTerm](https://github.com/yousefdg005/qwqw) عبر REST API مؤمّن، ويضعها في قائمة انتظار للمراجعة البشرية، ثم يتيح تصدير المصطلحات المعتمدة بصيغ متعددة متوافقة مع أدوات الترجمة بمساعدة الحاسوب (CAT Tools).
 
 **منظومة الأدوار:**
 - **Admin (مدير قاعدة المصطلحات):** يستعرض المصطلحات الواردة، يعتمدها أو يرفضها أو يعدّلها، ويُصدّر القاموس المكتمل
@@ -53,9 +55,9 @@
 
 ```mermaid
 flowchart LR
-    A["⚡ AI Legal Workspace\nPlatform A — qwqw"] -->|"POST /api/receive-terms\nBearer Token Auth\n10 مصطلحات / دُفعة"| B
+    A["⚡ LexTerm\nPlatform A — qwqw"] -->|"POST /api/receive-terms\nBearer Token Auth\n10 مصطلحات / دُفعة"| B
 
-    subgraph P2["🏛️ هذه المنصة — Legal Dictionary"]
+    subgraph P2["🦉 هذه المنصة — LexTerm"]
         B["receive_terms() API\nتحقق من Bearer Token\nكشف التكرار الفوري\nstatus = 'pending'"]
         B --> C["📋 لوحة Admin\nعرض المصطلحات المعلّقة\nمع نص المصدر"]
         C --> D{"👤 قرار المدير"}
