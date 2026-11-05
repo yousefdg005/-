@@ -1,34 +1,131 @@
-/* متغيرات الألوان المتناسقة مع واجهة الميزان 3D */
+/* ============================================================
+   LexTerm — Legal Dictionary | Visual Identity
+   Owl Navy (#16294A) & Gold (#C9963C) — matching the LexTerm suite
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Amiri:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+
+/* متغيرات الألوان — هوية البومة (كحلي وذهبي) */
 :root {
-    --primary-gold: #d4af37;
-    --dark-gold: #aa8529;
-    --bg-color: #050e14;
-    --panel-bg: linear-gradient(135deg, #1c2329 0%, #0d1317 100%);
-    --text-light: #f5f6fa;
-    --text-gray: #bdc3c7;
+    --primary-gold: #C9963C;
+    --gold-bright: #E8C069;
+    --dark-gold: #A87B2E;
+    --bg-color: #0A1220;
+    --navy-deep: #16294A;
+    --panel-bg: linear-gradient(135deg, #14243E 0%, #0C1830 100%);
+    --border-navy: #2A4066;
+    --text-light: #F2F5FA;
+    --text-gray: #93A5C4;
 }
 
 /* تنسيقات عامة للوحة التحكم وصفحة القاموس */
 body {
     font-family: 'Cairo', sans-serif;
     background-color: var(--bg-color) !important;
+    background-image:
+        radial-gradient(ellipse 60% 35% at 15% 0%, rgba(201,150,60,0.05) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 30% at 85% 100%, rgba(27,51,88,0.30) 0%, transparent 60%) !important;
     color: var(--text-light) !important;
+    min-height: 100vh;
 }
 
 .gold-text {
-    color: var(--primary-gold) !important;
+    color: var(--gold-bright) !important;
 }
 
 .text-gray {
     color: var(--text-gray) !important;
-    opacity: 0.8;
+    opacity: 0.9;
+}
+
+/* ═══════════════════════════════════════
+   شريط التنقل — لوح كحلي بحد ذهبي
+═══════════════════════════════════════ */
+.navbar {
+    background: linear-gradient(135deg, #14243E 0%, #0C1830 100%) !important;
+    border-bottom: 2px solid transparent;
+    border-image: linear-gradient(90deg, transparent 0%, var(--primary-gold) 35%, var(--gold-bright) 50%, var(--primary-gold) 65%, transparent 100%) 1;
+    box-shadow: 0 4px 24px rgba(2,6,14,0.55);
+    padding: 12px 0;
+}
+
+.brand-logo {
+    height: 46px;
+    width: 46px;
+    object-fit: contain;
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 4px;
+    border: 1.5px solid rgba(201,150,60,0.55);
+    box-shadow: 0 3px 14px rgba(2,6,14,0.5), 0 0 16px rgba(201,150,60,0.25);
+}
+
+.navbar-brand {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Cairo', sans-serif;
+    font-weight: 800;
+    font-size: 1.25rem;
+    color: var(--text-light) !important;
+    letter-spacing: 0.3px;
+}
+
+/* wordmark — LexTerm بنمط منصة الاستخراج */
+.navbar-brand .brand-word {
+    font-family: 'Inter', 'Cairo', sans-serif;
+    font-weight: 800;
+    font-size: 1.35rem;
+    letter-spacing: 0.5px;
+}
+.navbar-brand .lex  { color: var(--text-light); }
+.navbar-brand .term { color: var(--gold-bright); }
+
+.navbar-brand:hover { color: var(--gold-bright) !important; }
+
+.navbar .nav-link {
+    color: var(--text-gray) !important;
+    font-weight: 600;
+    transition: all 0.25s;
+}
+
+.navbar .nav-link:hover { color: var(--gold-bright) !important; }
+
+/* ═══════════════════════════════════════
+   التذييل
+═══════════════════════════════════════ */
+.site-footer {
+    margin-top: 3rem;
+    padding: 18px;
+    text-align: center;
+    background: linear-gradient(135deg, #0F1B30 0%, #0C1830 100%);
+    border-top: 1px solid var(--border-navy);
+    color: var(--text-gray);
+    font-size: 0.9rem;
+}
+
+.site-footer .footer-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    color: var(--text-light);
+}
+
+.site-footer .footer-brand img {
+    height: 26px;
+    width: 26px;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 7px;
+    padding: 2px;
+    border: 1px solid rgba(201,150,60,0.55);
 }
 
 /* اللوحة الداكنة (بديل الورقة البيضاء) */
 .dark-panel {
     background: var(--panel-bg);
-    border: 1px solid var(--dark-gold);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 15px rgba(212,175,55,0.05);
+    border: 1px solid var(--border-navy);
+    box-shadow: 0 10px 30px rgba(2,6,14,0.8), inset 0 0 15px rgba(201,150,60,0.05);
 }
 
 /* تنسيق الجدول الداكن الفخم */
@@ -39,8 +136,8 @@ body {
 }
 
 .thead-gold th {
-    background-color: rgba(212, 175, 55, 0.1);
-    color: var(--primary-gold);
+    background-color: rgba(201, 150, 60, 0.10);
+    color: var(--gold-bright);
     font-family: 'Amiri', serif;
     font-size: 1.2rem;
     border-bottom: 2px solid var(--dark-gold);
@@ -53,15 +150,15 @@ body {
 }
 
 .table-dark-custom tbody tr:hover {
-    background-color: rgba(212, 175, 55, 0.08);
+    background-color: rgba(201, 150, 60, 0.08);
     transform: scale(1.01); /* تكبير الصف بشكل خفيف جداً */
-    box-shadow: inset 0 0 15px rgba(212, 175, 55, 0.15);
+    box-shadow: inset 0 0 15px rgba(201, 150, 60, 0.15);
 }
 
 /* حقل البحث الذهبي الجديد */
 .gold-input {
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid #34495e;
+    border: 1px solid var(--border-navy);
     padding: 0.6rem 1.2rem;
     border-radius: 6px;
     color: #fff;
@@ -74,14 +171,14 @@ body {
 
 .gold-input:focus {
     border-color: var(--primary-gold);
-    background: rgba(212, 175, 55, 0.05);
-    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+    background: rgba(201, 150, 60, 0.05);
+    box-shadow: 0 0 10px rgba(201, 150, 60, 0.2);
 }
 
 /* الأزرار وتنبيهات النجاح/الخطأ */
 .btn-custom {
-    background: var(--primary-gold);
-    color: var(--bg-color);
+    background: linear-gradient(135deg, var(--gold-bright) 0%, var(--primary-gold) 55%, var(--dark-gold) 100%);
+    color: #0A1220;
     border: none;
     border-radius: 8px;
     font-weight: 600;
@@ -89,17 +186,24 @@ body {
 }
 
 .btn-custom:hover {
-    background: #e5c354;
-    box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
-    color: var(--bg-color);
+    background: linear-gradient(135deg, var(--gold-bright) 0%, var(--primary-gold) 100%);
+    box-shadow: 0 0 15px rgba(201, 150, 60, 0.45);
+    color: #0A1220;
 }
 
 .alert-dismissible {
     border-radius: 8px;
-    background: rgba(212, 175, 55, 0.1);
+    background: rgba(201, 150, 60, 0.10);
     border: 1px solid var(--primary-gold);
-    color: var(--primary-gold);
+    color: var(--gold-bright);
 }
+
+/* توحيد لون شارة العدد مع الهوية */
+.badge.bg-warning {
+    background: linear-gradient(135deg, var(--gold-bright) 0%, var(--primary-gold) 100%) !important;
+    color: #0A1220 !important;
+}
+
 /* ========================================== */
 /* إصلاح ألوان لوحة الإدارة (Admin Dashboard) */
 /* ========================================== */
@@ -107,26 +211,26 @@ body {
 /* تحويل الصناديق البيضاء إلى ألواح داكنة */
 .bg-white, .card {
     background: var(--panel-bg) !important;
-    border: 1px solid var(--dark-gold) !important;
+    border: 1px solid var(--border-navy) !important;
     color: var(--text-light) !important;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5) !important;
+    box-shadow: 0 5px 15px rgba(2,6,14,0.5) !important;
 }
 
 /* تنسيق النصوص داخل الصناديق */
 .card-header, .card-title, label {
-    color: var(--primary-gold) !important;
+    color: var(--gold-bright) !important;
 }
 
 /* تنسيق حقول الإدخال والقوائم المنسدلة في لوحة الإدارة */
 .form-control, .form-select {
     background-color: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid #34495e !important;
+    border: 1px solid var(--border-navy) !important;
     color: #fff !important;
 }
 
 .form-control:focus, .form-select:focus {
     border-color: var(--primary-gold) !important;
-    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2) !important;
+    box-shadow: 0 0 10px rgba(201, 150, 60, 0.2) !important;
 }
 
 /* إصلاح ألوان جدول المصطلحات المستخرجة (Pending Terms) */
@@ -135,8 +239,8 @@ body {
 }
 
 .table thead th {
-    background-color: rgba(212, 175, 55, 0.1) !important;
-    color: var(--primary-gold) !important;
+    background-color: rgba(201, 150, 60, 0.10) !important;
+    color: var(--gold-bright) !important;
     border-bottom: 2px solid var(--dark-gold) !important;
 }
 
@@ -147,5 +251,5 @@ body {
 }
 
 .table-hover tbody tr:hover td {
-    background-color: rgba(212, 175, 55, 0.08) !important;
+    background-color: rgba(201, 150, 60, 0.08) !important;
 }
