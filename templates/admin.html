@@ -289,15 +289,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     }
-    const input = document.getElementById('approvedSearch');
-    if (input) {
-        input.addEventListener('input', function () {
-            const query = input.value.trim().toLocaleLowerCase();
-            document.querySelectorAll('#approvedTable .approved-row').forEach(function (row) {
-                row.style.display = row.textContent.toLocaleLowerCase().includes(query) ? '' : 'none';
-            });
-        });
-    }
 });
 </script>
 {% endblock %}

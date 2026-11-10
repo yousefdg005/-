@@ -253,3 +253,17 @@ body {
 .table-hover tbody tr:hover td {
     background-color: rgba(201, 150, 60, 0.08) !important;
 }
+
+/* ========================================================
+   تظليل نتائج البحث باللون الأصفر في عمودي المصطلح (EN / AR)
+   ======================================================== */
+.search-highlight {
+    background-color: #FFEE58 !important; /* أصفر ساطع ومريح */
+    color: #0A1220 !important;            /* نص كحلي داكن شديد التباين */
+    font-weight: 800 !important;
+    padding: 1px 4px !important;
+    border-radius: 3px !important;
+    box-shadow: 0 0 8px rgba(255, 238, 88, 0.7) !important;
+    display: inline-block !important;
+    line-height: 1.2 !important;
+}
