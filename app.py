@@ -2,6 +2,10 @@ import os
 import csv
 import io
 import re
+import json
+import hmac
+import secrets
+import requests
 import unicodedata
 from datetime import datetime
 from xml.sax.saxutils import escape
@@ -13,12 +17,19 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf import CSRFProtect
 from dotenv import load_dotenv
-from sqlalchemy import text
+from sqlalchemy import text, func
 
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'dictionary-secure-fallback-key-2026' 
+
+# مفتاح الجلسات السري: في بيئة الإنتاج يُلزم وجوده، وفي التطوير المحلي يُولد مفتاح عشوائي آمن
+raw_secret = os.environ.get('SECRET_KEY')
+if not raw_secret:
+    if os.environ.get('RENDER') or os.environ.get('ENV') == 'production':
+        raise RuntimeError("CRITICAL SECURITY ERROR: SECRET_KEY environment variable is missing in production!")
+    raw_secret = secrets.token_hex(32)
+app.config['SECRET_KEY'] = raw_secret
 
 db_url = os.getenv('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
@@ -26,65 +37,85 @@ if db_url and db_url.startswith("postgres://"):
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# حد أقصى لحجم حمولة الطلبات لحماية الذاكرة ومنع هجمات حجب الخدمة (4MB)
+app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024
+
 # إعدادات حوض الاتصال لدعم السيرفرليس (Neon) وتفادي قطع اتصال SSL عند الخمول
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'pool_recycle': 300,
     'pool_timeout': 30,
 }
-# تقوية كوكيز الجلسة: SameSite يمنع إرسالها من مواقع أخرى، وSecure عند التشغيل خلف HTTPS
+
+# تقوية كوكيز الجلسة: HttpOnly و SameSite و Secure
+app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
-app.config['WTF_CSRF_TIME_LIMIT'] = None
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'true' if os.environ.get('RENDER') else 'false').lower() == 'true'
+app.config['WTF_CSRF_TIME_LIMIT'] = 3600 * 24
 
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# لا حد عام على كل المسارات — الحدود تُضبط لكل مسار حتى لا يُخنق تصفح القاموس وسحب المصطلحات
 limiter = Limiter(get_remote_address, app=app, default_limits=[])
 csrf = CSRFProtect(app)
+
+# ترويسات الأمان الأساسية للحماية من Clickjacking و MIME-sniffing
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
 
 # --- الجداول (Database Models) ---
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=False, index=True)
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='reader')
 
-# تحديث هيكل جدول المصطلحات
 class Term(db.Model):
+    __tablename__ = 'term'
     id = db.Column(db.Integer, primary_key=True)
-    en = db.Column(db.String(255), nullable=False)
+    en = db.Column(db.String(255), nullable=False, index=True)
     ar = db.Column(db.String(255), nullable=True)
     definition = db.Column(db.Text, nullable=True)
-    subject_field = db.Column(db.String(150), nullable=True, default="قانون عام") # إضافة عمود المجال
-    # نصوص المصدر التي استُخرج منها المصطلح (تُرسل تلقائياً من منصة الاستخراج AI Legal Workspace)
+    subject_field = db.Column(db.String(150), nullable=True, default="قانون عام")
     source_text_en = db.Column(db.Text, nullable=True)
     source_text_ar = db.Column(db.Text, nullable=True)
     date = db.Column(db.DateTime, default=db.func.now())
-    status = db.Column(db.String(50), default='pending')
+    status = db.Column(db.String(50), default='pending', index=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
-# جدول حفظ إعدادات الأدمن
+    __table_args__ = (
+        db.Index('idx_term_status_en', 'status', 'en'),
+    )
+
 class Setting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
     value = db.Column(db.Text, nullable=True)
 
-# إنشاء الجداول تلقائياً عند الإقلاع
+# إنشاء الجداول تلقائياً والتحقق من الأعمدة
 with app.app_context():
     db.create_all()
-    # ترحيل تلقائي خفيف: إضافة أعمدة نصوص المصدر لقواعد بيانات قائمة
-    # (db.create_all() لا يضيف أعمدة للجداول الموجودة مسبقاً — ALTER هنا آمن ومتكرر الأمان idempotent)
     try:
         if db.engine.name == 'sqlite':
             cols = [row[1] for row in db.session.execute(text("PRAGMA table_info(term)")).fetchall()]
-            if 'source_text_en' not in cols:
-                db.session.execute(text("ALTER TABLE term ADD COLUMN source_text_en TEXT;"))
-            if 'source_text_ar' not in cols:
-                db.session.execute(text("ALTER TABLE term ADD COLUMN source_text_ar TEXT;"))
+            sqlite_columns = [
+                ('subject_field', "VARCHAR(150) DEFAULT 'قانون عام'"),
+                ('source_text_en', "TEXT"),
+                ('source_text_ar', "TEXT"),
+                ('date', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+                ('created_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            ]
+            for col_name, col_def in sqlite_columns:
+                if col_name not in cols:
+                    db.session.execute(text(f"ALTER TABLE term ADD COLUMN {col_name} {col_def};"))
         else:  # PostgreSQL (Neon/Render)
             db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS subject_field VARCHAR(150) DEFAULT 'قانون عام';"))
             db.session.execute(text("ALTER TABLE term ADD COLUMN IF NOT EXISTS source_text_en TEXT;"))
@@ -99,23 +130,34 @@ with app.app_context():
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# دالة مساعدة لجلب إعدادات الذكاء الاصطناعي
 def get_ai_config():
     api_key_setting = Setting.query.filter_by(key='openrouter_api_key').first()
     model_setting = Setting.query.filter_by(key='openrouter_model').first()
-    
     api_key = api_key_setting.value if api_key_setting else os.getenv('OPENROUTER_API_KEY', '')
     model = model_setting.value if model_setting else 'openai/gpt-3.5-turbo'
     return api_key, model
 
-# مفتاح تطبيع المصطلحات لكشف التكرارات (يتجاهل حالة الأحرف والترقيم والمسافات الزائدة)
 def _term_key(value):
     value = unicodedata.normalize("NFKC", str(value or "")).casefold()
     value = re.sub(r"[\W_]+", " ", value, flags=re.UNICODE)
     return re.sub(r"\s+", " ", value).strip()
 
-# --- API استقبال المصطلحات من المنصة (Streamlit) ---
-# إعفاء من CSRF لأن المصادقة هنا عبر Bearer Token وليس كوكيز الجلسة
+def sanitize_excel_cell(value):
+    """حماية ملفات Excel و CSV من ثغرة Formula Injection (CWE-1236)"""
+    if value is None:
+        return ""
+    val_str = str(value)
+    if val_str and val_str[0] in ('=', '+', '-', '@', '\t', '\r'):
+        return "'" + val_str
+    return val_str
+
+def clean_xml_text(value):
+    """تنظيف النصوص من المحارف غير الصالحة في مواصفة XML 1.0"""
+    if not value:
+        return ""
+    return re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', str(value))
+
+# --- API استقبال المصطلحات من المنصة (qwqw) ---
 @csrf.exempt
 @app.route('/api/receive-terms', methods=['POST'])
 @limiter.limit("60 per hour")
@@ -126,21 +168,26 @@ def receive_terms():
         return jsonify({'error': 'Server configuration error: INGEST_API_KEY is not configured'}), 500
 
     expected_token = f"Bearer {ingest_key}"
-    if not auth_header or auth_header != expected_token:
+    # مقارنة آمنة ذات وقت ثابت لمنع هجمات التوقيت
+    if not auth_header or not hmac.compare_digest(auth_header, expected_token):
         return jsonify({'error': 'Unauthorized'}), 401
         
-    data = request.get_json()
+    data = request.get_json(silent=True)
     if not data or not isinstance(data, dict):
         return jsonify({'error': 'Invalid JSON payload'}), 400
 
     terms = data.get('terms', [])
     if not isinstance(terms, list):
         return jsonify({'error': 'Terms payload must be a list'}), 400
+
+    if len(terms) > 300:
+        return jsonify({'error': 'Batch size exceeds limit of 300 terms'}), 400
     
     try:
-        # فحص استباقي للمصطلحات المسجلة مسبقاً (معتمدة أو معلقة) لمنع التكرار اللحظي
-        existing_rows = db.session.query(Term.en).all()
-        existing_keys = {_term_key(r[0]) for r in existing_rows if r[0]}
+        # فحص استباقي للمصطلحات الواردة بالدفعة فقط بدلاً من جلب كامل الجدول لتوفير الذاكرة
+        incoming_words = [str(item.get('en') or '').strip() for item in terms if item.get('en')]
+        matched_rows = Term.query.filter(Term.en.in_(incoming_words)).all() if incoming_words else []
+        existing_keys = {_term_key(r.en) for r in matched_rows}
 
         seen_in_batch = set()
         added_count = 0
@@ -152,7 +199,6 @@ def receive_terms():
                 continue
 
             norm_key = _term_key(eng)
-            # إذا كان المصطلح موجوداً مسبقاً في القاموس أو تكرر في نفس الدفعة، يتم تجاوزه
             if not norm_key or norm_key in existing_keys or norm_key in seen_in_batch:
                 skipped_count += 1
                 continue
@@ -164,7 +210,7 @@ def receive_terms():
                 en=eng,
                 ar=str(item.get('ar') or '').strip(),
                 definition=str(item.get('definition') or '').strip(),
-                subject_field=str(item.get('subject field') or 'قانون عام').strip(),
+                subject_field=str(item.get('subject field') or item.get('subject_field') or 'قانون عام').strip(),
                 source_text_en=str(item.get('source_text_en') or item.get('source text en') or '').strip(),
                 source_text_ar=str(item.get('source_text_ar') or item.get('source text ar') or '').strip(),
                 status='pending'
@@ -194,14 +240,14 @@ def index():
 @limiter.limit("10 per minute")
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        user = User.query.filter_by(username=username).first()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        user = User.query.filter(func.lower(User.username) == username.lower()).first()
         if user and bcrypt.check_password_hash(user.password, password):
             login_user(user)
             return redirect(url_for('index'))
         else:
-            flash('Invalid credentials. Please try again.', 'danger')
+            flash('بيانات الدخول غير صحيحة، يرجى المحاولة مجدداً.', 'danger')
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -219,11 +265,19 @@ def register():
             flash('يرجى ملء جميع الحقول المطلوبة.', 'danger')
             return render_template('login.html')
             
-        if confirm_password and password != confirm_password:
+        if len(username) < 3 or len(username) > 50:
+            flash('اسم المستخدم يجب أن يكون بين 3 و 50 حرفاً.', 'danger')
+            return render_template('login.html')
+
+        if len(password) < 8:
+            flash('كلمة المرور يجب أن تتكون من 8 أحرف على الأقل.', 'danger')
+            return render_template('login.html')
+
+        if password != confirm_password:
             flash('كلمة المرور وتأكيد كلمة المرور غير متطابقتين.', 'danger')
             return render_template('login.html')
             
-        if User.query.filter_by(username=username).first():
+        if User.query.filter(func.lower(User.username) == username.lower()).first():
             flash('اسم المستخدم مسجل مسبقاً، يرجى اختيار اسم آخر.', 'warning')
             return render_template('login.html')
             
@@ -232,7 +286,7 @@ def register():
         db.session.add(new_user)
         db.session.commit()
         
-        flash('Account created successfully! You can now login as a Reader.', 'success')
+        flash('تم إنشاء حساب القارئ بنجاح! يمكنك الآن تسجيل الدخول.', 'success')
         return redirect(url_for('login'))
         
     return render_template('login.html')
@@ -244,6 +298,7 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/account/password', methods=['GET', 'POST'])
+@limiter.limit("5 per minute", methods=['POST'])
 @login_required
 def change_password():
     if request.method == 'POST':
@@ -268,7 +323,6 @@ def change_password():
 @app.route('/dictionary')
 @login_required
 def dictionary():
-    # تحديث جلب البيانات لترتيبها حسب الحقل الجديد
     terms = Term.query.filter_by(status='approved').order_by(Term.en).all()
     return render_template('dictionary.html', terms=terms)
 
@@ -279,26 +333,29 @@ def admin():
         return "Access Denied", 403
     
     if request.method == 'POST':
-        # تحديث الإدخال اليدوي للأدمن ليطابق الأعمدة الجديدة
-        en_term = request.form.get('en')
-        ar_term = request.form.get('ar')
-        definition = request.form.get('definition')
-        subject_field = request.form.get('subject_field', 'قانون عام')
-        source_text_en = request.form.get('source_text_en')
-        source_text_ar = request.form.get('source_text_ar')
+        en_term = request.form.get('en', '').strip()
+        ar_term = request.form.get('ar', '').strip()
+        definition = request.form.get('definition', '').strip()
+        subject_field = request.form.get('subject_field', 'قانون عام').strip()
+        source_text_en = request.form.get('source_text_en', '').strip()
+        source_text_ar = request.form.get('source_text_ar', '').strip()
+
+        if not en_term:
+            flash('المصطلح الإنجليزي حقل إلزامي.', 'warning')
+            return redirect(url_for('admin'))
 
         new_term = Term(
             en=en_term,
             ar=ar_term,
             definition=definition,
-            subject_field=subject_field,
+            subject_field=subject_field or 'قانون عام',
             source_text_en=source_text_en,
             source_text_ar=source_text_ar,
             status='pending'
         )
         db.session.add(new_term)
         db.session.commit()
-        flash('Term added manually and is pending review.', 'success')
+        flash('تمت إضافة المصطلح يدوياً وهو بانتظار المراجعة والاعتماد.', 'success')
         return redirect(url_for('admin'))
         
     pending_terms = Term.query.filter(Term.status.in_(['pending', 'ai_suggested'])).order_by(Term.date.desc()).all()
@@ -322,7 +379,6 @@ def save_settings():
     api_key = request.form.get('openrouter_api_key', '').strip()
     selected_model = request.form.get('openrouter_model', 'openai/gpt-3.5-turbo')
     
-    # المفتاح لا يُحفظ إلا إذا أُدخل مفتاح جديد — الواجهة لا تعرض المفتاح المحفوظ أبداً
     if api_key:
         key_setting = Setting.query.filter_by(key='openrouter_api_key').first()
         if not key_setting:
@@ -338,7 +394,70 @@ def save_settings():
         model_setting.value = selected_model
         
     db.session.commit()
-    flash('OpenRouter settings and AI Model saved successfully!', 'success')
+    flash('تم حفظ إعدادات OpenRouter ونموذج الذكاء الاصطناعي بنجاح!', 'success')
+    return redirect(url_for('admin'))
+
+@app.route('/admin/process_ai/<int:term_id>', methods=['POST'])
+@login_required
+def process_ai(term_id):
+    if current_user.role != 'admin':
+        return "Access Denied", 403
+        
+    term = Term.query.get_or_404(term_id)
+    api_key, model = get_ai_config()
+    if not api_key:
+        flash('يرجى ضبط مفتاح OpenRouter في إعدادات الذكاء الاصطناعي أولاً.', 'danger')
+        return redirect(url_for('admin'))
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://lexterm.legal",
+        "X-Title": "LexTerm Legal Dictionary"
+    }
+    
+    prompt = (
+        f"أنت خبير في المصطلحات والترجمة القانونية. حلل المصطلح التالي:\n"
+        f"المصطلح الإنجليزي: '{term.en}'\n"
+        f"المقابل العربي الحالي: '{term.ar or ''}'\n"
+        f"التعريف الحالي: '{term.definition or ''}'\n"
+        f"المجال الحالي: '{term.subject_field or ''}'\n\n"
+        f"أعد الرد بصيغة JSON نقية فقط (بدون أي نصوص إضافية أو markdown خارج JSON) تحتوي المفاتيح التالية باللغة العربية:\n"
+        f'{{"ar": "أدق مقابل قانوني عربي", "definition": "شرح قانوني موجز ومحدد", "subject_field": "الفرع القانوني الدقيق مثل قانون جنائي، تجاري، مدني..."}}'
+    )
+    
+    data = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2
+    }
+    
+    try:
+        res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data, timeout=25)
+        if res.status_code != 200:
+            flash(f'فشل الاتصال بـ OpenRouter (رمز الخطأ: {res.status_code})', 'danger')
+            return redirect(url_for('admin'))
+            
+        raw_content = res.json()['choices'][0]['message']['content'].strip()
+        if raw_content.startswith('```'):
+            raw_content = re.sub(r'^```(?:json)?\s*', '', raw_content)
+            raw_content = re.sub(r'\s*```$', '', raw_content)
+            
+        ai_data = json.loads(raw_content)
+        if ai_data.get('ar'):
+            term.ar = str(ai_data['ar']).strip()
+        if ai_data.get('definition'):
+            term.definition = str(ai_data['definition']).strip()
+        if ai_data.get('subject_field'):
+            term.subject_field = str(ai_data['subject_field']).strip()
+            
+        term.status = 'ai_suggested'
+        db.session.commit()
+        flash(f'تم تحسين المصطلح "{term.en}" بنجاح بواسطة الذكاء الاصطناعي [{model}].', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'حدث خطأ أثناء معالجة الذكاء الاصطناعي: {str(e)}', 'danger')
+        
     return redirect(url_for('admin'))
 
 @app.route('/admin/bulk_action', methods=['POST'])
@@ -356,21 +475,14 @@ def bulk_action():
         return redirect(url_for('admin'))
         
     try:
-        # تحويل المعرفات إلى أعداد صحيحة
         term_ids_int = [int(t) for t in term_ids]
-        terms = Term.query.filter(Term.id.in_(term_ids_int)).all()
-        
-        for term in terms:
-            if action == 'approve':
-                term.status = 'approved'
-            elif action == 'delete':
-                db.session.delete(term)
-                
-        db.session.commit()
-        
         if action == 'approve':
+            Term.query.filter(Term.id.in_(term_ids_int)).update({Term.status: 'approved'}, synchronize_session=False)
+            db.session.commit()
             flash('تم اعتماد المصطلحات المحددة بنجاح!', 'success')
         elif action == 'delete':
+            Term.query.filter(Term.id.in_(term_ids_int)).delete(synchronize_session=False)
+            db.session.commit()
             flash('تم حذف المصطلحات المحددة بنجاح!', 'success')
     except Exception as e:
         db.session.rollback()
@@ -390,9 +502,7 @@ def approved_bulk_delete():
         return redirect(url_for('admin'))
         
     try:
-        # تحويل المعرفات إلى أعداد صحيحة لتتوافق مع نوع العمود في PostgreSQL
         term_ids_int = [int(t) for t in term_ids]
-        
         deleted_count = Term.query.filter(
             Term.id.in_(term_ids_int), 
             Term.status == 'approved'
@@ -413,7 +523,7 @@ def approve_term(term_id):
     term = Term.query.get_or_404(term_id)
     term.status = 'approved'
     db.session.commit()
-    flash('Term approved and published!', 'success')
+    flash(f'تم اعتماد ونشر المصطلح "{term.en}" بنجاح!', 'success')
     return redirect(url_for('admin'))
 
 @app.route('/admin/delete/<int:term_id>', methods=['POST'])
@@ -423,7 +533,7 @@ def delete_term(term_id):
     term = Term.query.get_or_404(term_id)
     db.session.delete(term)
     db.session.commit()
-    flash('Term deleted.', 'warning')
+    flash('تم حذف المصطلح بنجاح.', 'warning')
     return redirect(url_for('admin'))
 
 @app.route('/admin/deduplicate', methods=['POST'])
@@ -432,7 +542,6 @@ def deduplicate_terms():
     if current_user.role != 'admin':
         return "Access Denied", 403
 
-    # إزالة تكرار محلية حتمية: الاحتفاظ بالأقدم (أصغر id) لكل مفتاح تطبيعي
     approved = Term.query.filter_by(status='approved').order_by(Term.id).all()
     kept_keys = set()
     dup_approved = []
@@ -443,7 +552,6 @@ def deduplicate_terms():
         else:
             kept_keys.add(key)
 
-    # المعلّق المطابق لمعتمد أصلاً يُحذف، ثم تُزال تكرارات المعلقين فيما بينهم
     pending = Term.query.filter(Term.status.in_(['pending', 'ai_suggested'])).order_by(Term.id).all()
     dup_pending = []
     seen_pending = set()
@@ -468,18 +576,17 @@ def deduplicate_terms():
 def edit_term(term_id):
     if current_user.role != 'admin': return "Access Denied", 403
     term = Term.query.get_or_404(term_id)
-    # تحديث حقول التعديل للمصطلحات
-    term.en = request.form.get('en')
-    term.ar = request.form.get('ar')
-    term.definition = request.form.get('definition')
-    term.subject_field = request.form.get('subject_field')
-    term.source_text_en = request.form.get('source_text_en')
-    term.source_text_ar = request.form.get('source_text_ar')
+    term.en = request.form.get('en', '').strip()
+    term.ar = request.form.get('ar', '').strip()
+    term.definition = request.form.get('definition', '').strip()
+    term.subject_field = request.form.get('subject_field', '').strip() or 'قانون عام'
+    term.source_text_en = request.form.get('source_text_en', '').strip()
+    term.source_text_ar = request.form.get('source_text_ar', '').strip()
     db.session.commit()
-    flash('Term updated.', 'success')
+    flash('تم حفظ تعديلات المصطلح بنجاح.', 'success')
     return redirect(url_for('admin'))
 
-# --- تصدير القاموس المعتمد بصيغة CSV (UTF-8 مع BOM) ---
+# --- تصدير القاموس المعتمد بصيغة CSV (محمي من Formula Injection وبدون Double BOM) ---
 @app.route('/admin/export/csv')
 @login_required
 def export_csv():
@@ -494,17 +601,16 @@ def export_csv():
         writer.writerow([
             idx,
             term.id,
-            term.en,
-            term.ar or '',
-            term.subject_field or '',
-            term.definition or '',
-            term.source_text_en or '',
-            term.source_text_ar or '',
+            sanitize_excel_cell(term.en),
+            sanitize_excel_cell(term.ar or ''),
+            sanitize_excel_cell(term.subject_field or ''),
+            sanitize_excel_cell(term.definition or ''),
+            sanitize_excel_cell(term.source_text_en or ''),
+            sanitize_excel_cell(term.source_text_ar or ''),
             term.date.strftime('%Y-%m-%d') if term.date else ''
         ])
 
-    # إضافة BOM (\ufeff) حتى تظهر الحروف العربية في Excel بشكل سليم 100%
-    data = '\ufeff' + output.getvalue()
+    data = output.getvalue()
     return send_file(
         io.BytesIO(data.encode('utf-8-sig')),
         mimetype='text/csv; charset=utf-8',
@@ -512,7 +618,7 @@ def export_csv():
         download_name=f'legal_dictionary_{datetime.now().strftime("%Y-%m-%d")}.csv'
     )
 
-# --- تصدير القاموس المعتمد بصيغة Excel (XLSX / XLS) ---
+# --- تصدير القاموس المعتمد بصيغة Excel (محمي من Formula Injection) ---
 @app.route('/admin/export/excel')
 @app.route('/admin/export/xls')
 @login_required
@@ -535,7 +641,6 @@ def export_excel():
     ]
     ws.append(headers)
 
-    # تنسيق رأس الجدول
     header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
     header_fill = PatternFill(start_color='1E293B', end_color='1E293B', fill_type='solid')
     header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -546,21 +651,19 @@ def export_excel():
         cell.fill = header_fill
         cell.alignment = header_align
 
-    # إضافة صفوف المصطلحات المعتمدة
     for idx, term in enumerate(terms, start=1):
         ws.append([
             idx,
             term.id,
-            term.en,
-            term.ar or '',
-            term.subject_field or '',
-            term.definition or '',
-            term.source_text_en or '',
-            term.source_text_ar or '',
+            sanitize_excel_cell(term.en),
+            sanitize_excel_cell(term.ar or ''),
+            sanitize_excel_cell(term.subject_field or ''),
+            sanitize_excel_cell(term.definition or ''),
+            sanitize_excel_cell(term.source_text_en or ''),
+            sanitize_excel_cell(term.source_text_ar or ''),
             term.date.strftime('%Y-%m-%d') if term.date else ''
         ])
 
-    # محاذاة البيانات وتفعيل التفاف النص (Wrap text)
     align_left = Alignment(horizontal='left', vertical='top', wrap_text=True)
     align_right = Alignment(horizontal='right', vertical='top', wrap_text=True)
     align_center = Alignment(horizontal='center', vertical='top')
@@ -576,7 +679,6 @@ def export_excel():
         row[7].alignment = align_right  # source_text_ar
         row[8].alignment = align_center # date
 
-    # تحديد عرض الأعمدة
     col_widths = {1: 8, 2: 8, 3: 25, 4: 25, 5: 22, 6: 40, 7: 40, 8: 40, 9: 14}
     for col_idx, width in col_widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = width
@@ -592,7 +694,7 @@ def export_excel():
         download_name=f'legal_dictionary_{datetime.now().strftime("%Y-%m-%d")}.xlsx'
     )
 
-# --- تصدير القاموس المعتمد بصيغة TBX (ISO 30042) المتوافقة مع أدوات الترجمة ---
+# --- تصدير القاموس المعتمد بصيغة TBX (ISO 30042) ---
 @app.route('/admin/export/tbx')
 @login_required
 def export_tbx():
@@ -600,6 +702,8 @@ def export_tbx():
 
     terms = Term.query.filter_by(status='approved').order_by(Term.en).all()
     today = datetime.now().strftime('%Y-%m-%d')
+
+    xml_entities = {'"': '&quot;', "'": '&apos;'}
 
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -624,15 +728,19 @@ def export_tbx():
     for term in terms:
         lines.append(f'      <termEntry id="c{term.id:06d}">')
         if term.subject_field:
-            lines.append(f'        <descripGrp><descrip type="subjectField">{escape(term.subject_field)}</descrip></descripGrp>')
+            clean_sub = escape(clean_xml_text(term.subject_field), xml_entities)
+            lines.append(f'        <descripGrp><descrip type="subjectField">{clean_sub}</descrip></descripGrp>')
+        clean_en = escape(clean_xml_text(term.en), xml_entities)
         lines.append('        <langSet xml:lang="en">')
-        lines.append(f'          <tig><term>{escape(term.en)}</term></tig>')
+        lines.append(f'          <tig><term>{clean_en}</term></tig>')
         lines.append('        </langSet>')
         if term.ar:
+            clean_ar = escape(clean_xml_text(term.ar), xml_entities)
             lines.append('        <langSet xml:lang="ar">')
             if term.definition:
-                lines.append(f'          <descripGrp><descrip type="definition">{escape(term.definition)}</descrip></descripGrp>')
-            lines.append(f'          <tig><term>{escape(term.ar)}</term></tig>')
+                clean_def = escape(clean_xml_text(term.definition), xml_entities)
+                lines.append(f'          <descripGrp><descrip type="definition">{clean_def}</descrip></descripGrp>')
+            lines.append(f'          <tig><term>{clean_ar}</term></tig>')
             lines.append('        </langSet>')
         lines.append('      </termEntry>')
     lines += [

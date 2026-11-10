@@ -150,6 +150,9 @@
                         </td>
                         <td style="text-align: center;">
                             <div class="d-flex gap-2 justify-content-center">
+                                {% if has_api_key %}
+                                <button type="submit" formaction="{{ url_for('process_ai', term_id=term.id) }}" class="btn btn-sm btn-info btn-custom" title="تحسين بالذكاء الاصطناعي (AI Refine)" onclick="return confirmAction('تحسين المصطلح واقتراح الترجمة بالذكاء الاصطناعي؟')">✨</button>
+                                {% endif %}
                                 <button type="submit" formaction="{{ url_for('approve_term', term_id=term.id) }}" class="btn btn-sm btn-success btn-custom" title="اعتماد" onclick="return confirmAction('اعتماد هذا المصطلح؟')">✅</button>
                                 <button type="submit" formaction="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger btn-custom" title="حذف" onclick="return confirmAction('تأكيد الحذف؟')">🗑️</button>
                             </div>

@@ -296,8 +296,18 @@ input:focus {
     text-align: center;
     z-index: 100;
 }
-.no-webgl #webgl-container { display: none; }
-.no-webgl #fallback-css { display: block; }
+.no-webgl #webgl-container { display: none !important; }
+.no-webgl #fallback-css { display: none !important; }
+.no-webgl .pan-label { display: none !important; }
+.no-webgl #forms-container {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: translate(-50%, -50%) scale(1) !important;
+}
+.no-webgl #forms-container .btn-back { display: none !important; }
+.no-webgl #form-login { display: flex; }
+.no-webgl #form-login.hidden { display: none !important; }
+.no-webgl #form-register.active { display: flex !important; }
 
 /* رسائل الخادم (Flash) — تظهر أعلى الشاشة فوق المشهد */
 #flash-toast {
@@ -363,7 +373,7 @@ input, textarea { user-select: text; }
         <!-- رسائل Flask (خطأ الدخول، نجاح إنشاء الحساب...) -->
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-        <div id="flash-toast" class="interactive {{ 'toast-error' if messages[0][0] == 'danger' else 'toast-success' }}">{{ messages[0][1] }}</div>
+        <div id="flash-toast" class="interactive {{ 'toast-error' if messages[0][0] in ['danger', 'warning', 'error'] else 'toast-success' }}">{{ messages[0][1] }}</div>
         {% endif %}
         {% endwith %}
 
@@ -377,37 +387,43 @@ input, textarea { user-select: text; }
             
             <!-- نموذج الدخول -->
             <form id="form-login" class="form-view" action="/login" method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <h2>دخول المشرف/القارئ</h2>
-    <div class="input-group">
-        <label for="login-email">اسم المستخدم</label>
-        <input type="text" id="login-email" name="username" required> <!-- أضفنا name -->
-    </div>
-    <div class="input-group">
-        <label for="login-password">كلمة المرور</label>
-        <input type="password" id="login-password" name="password" required> <!-- أضفنا name -->
-    </div>
-    <button type="submit" class="btn-submit">دخول</button>
-</form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <h2>دخول المشرف/القارئ</h2>
+                <div class="input-group">
+                    <label for="login-email">اسم المستخدم</label>
+                    <input type="text" id="login-email" name="username" required>
+                </div>
+                <div class="input-group">
+                    <label for="login-password">كلمة المرور</label>
+                    <input type="password" id="login-password" name="password" required>
+                </div>
+                <button type="submit" class="btn-submit">دخول</button>
+                <p style="font-size: 0.9rem; text-align: center; margin-top: 12px; color: #cbd5e1;">
+                    ليس لديك حساب؟ <a href="javascript:void(0)" id="toggle-to-reg" style="color: var(--gold-bright); text-decoration: underline;">إنشاء حساب جديد</a>
+                </p>
+            </form>
 
             <!-- نموذج التسجيل -->
             <form id="form-register" class="form-view" action="/register" method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <h2>حساب قارئ جديد</h2>
-    <div class="input-group">
-        <label for="reg-name">اسم المستخدم</label>
-        <input type="text" id="reg-name" name="username" required> <!-- أضفنا name -->
-    </div>
-    <div class="input-group">
-        <label for="reg-password">كلمة المرور</label>
-        <input type="password" id="reg-password" name="password" required> <!-- أضفنا name -->
-    </div>
-    <div class="input-group">
-        <label for="reg-confirm">تأكيد كلمة المرور</label>
-        <input type="password" id="reg-confirm" name="confirm_password" required> <!-- أضفنا name -->
-    </div>
-    <button type="submit" class="btn-submit">تسجيل</button>
-</form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <h2>حساب قارئ جديد</h2>
+                <div class="input-group">
+                    <label for="reg-name">اسم المستخدم</label>
+                    <input type="text" id="reg-name" name="username" required minlength="3" maxlength="50">
+                </div>
+                <div class="input-group">
+                    <label for="reg-password">كلمة المرور (8 أحرف على الأقل)</label>
+                    <input type="password" id="reg-password" name="password" required minlength="8">
+                </div>
+                <div class="input-group">
+                    <label for="reg-confirm">تأكيد كلمة المرور</label>
+                    <input type="password" id="reg-confirm" name="confirm_password" required minlength="8">
+                </div>
+                <button type="submit" class="btn-submit">تسجيل</button>
+                <p style="font-size: 0.9rem; text-align: center; margin-top: 12px; color: #cbd5e1;">
+                    لديك حساب بالفعل؟ <a href="javascript:void(0)" id="toggle-to-log" style="color: var(--gold-bright); text-decoration: underline;">تسجيل الدخول</a>
+                </p>
+            </form>
         </div>
     </div>
 
@@ -739,6 +755,22 @@ input, textarea { user-select: text; }
         labelRegister.addEventListener('click', () => openForm('REGISTER'));
 
         btnBack.addEventListener('click', resetToIdle);
+
+        const toggleToReg = document.getElementById('toggle-to-reg');
+        if (toggleToReg) {
+            toggleToReg.addEventListener('click', (e) => {
+                e.preventDefault();
+                openForm('REGISTER');
+            });
+        }
+
+        const toggleToLog = document.getElementById('toggle-to-log');
+        if (toggleToLog) {
+            toggleToLog.addEventListener('click', (e) => {
+                e.preventDefault();
+                openForm('LOGIN');
+            });
+        }
 
         // ==========================================
         // 7. معالجة النماذج (Form Submission)
