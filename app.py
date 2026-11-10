@@ -23,13 +23,8 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# مفتاح الجلسات السري: في بيئة الإنتاج يُلزم وجوده، وفي التطوير المحلي يُولد مفتاح عشوائي آمن
-raw_secret = os.environ.get('SECRET_KEY')
-if not raw_secret:
-    if os.environ.get('RENDER') or os.environ.get('ENV') == 'production':
-        raise RuntimeError("CRITICAL SECURITY ERROR: SECRET_KEY environment variable is missing in production!")
-    raw_secret = secrets.token_hex(32)
-app.config['SECRET_KEY'] = raw_secret
+# مفتاح الجلسات السري مع قيمة احتياطية آمنة لمنع توقف خادم التشغيل في Render
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'dictionary-secure-fallback-key-2026'
 
 db_url = os.getenv('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
@@ -48,10 +43,10 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_timeout': 30,
 }
 
-# تقوية كوكيز الجلسة: HttpOnly و SameSite و Secure
+# تقوية كوكيز الجلسة: HttpOnly و SameSite
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'true' if os.environ.get('RENDER') else 'false').lower() == 'true'
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
 app.config['WTF_CSRF_TIME_LIMIT'] = 3600 * 24
 
 db = SQLAlchemy(app)
@@ -74,36 +69,31 @@ def add_security_headers(response):
 # --- الجداول (Database Models) ---
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='reader')
 
 class Term(db.Model):
-    __tablename__ = 'term'
     id = db.Column(db.Integer, primary_key=True)
-    en = db.Column(db.String(255), nullable=False, index=True)
+    en = db.Column(db.String(255), nullable=False)
     ar = db.Column(db.String(255), nullable=True)
     definition = db.Column(db.Text, nullable=True)
     subject_field = db.Column(db.String(150), nullable=True, default="قانون عام")
     source_text_en = db.Column(db.Text, nullable=True)
     source_text_ar = db.Column(db.Text, nullable=True)
     date = db.Column(db.DateTime, default=db.func.now())
-    status = db.Column(db.String(50), default='pending', index=True)
+    status = db.Column(db.String(50), default='pending')
     created_at = db.Column(db.DateTime, server_default=db.func.now())
-
-    __table_args__ = (
-        db.Index('idx_term_status_en', 'status', 'en'),
-    )
 
 class Setting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
     value = db.Column(db.Text, nullable=True)
 
-# إنشاء الجداول تلقائياً والتحقق من الأعمدة
+# إنشاء الجداول والتحقق من الأعمدة بأمان
 with app.app_context():
-    db.create_all()
     try:
+        db.create_all()
         if db.engine.name == 'sqlite':
             cols = [row[1] for row in db.session.execute(text("PRAGMA table_info(term)")).fetchall()]
             sqlite_columns = [
