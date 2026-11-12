@@ -96,6 +96,7 @@
         </div>
     </div>
     
+    <!-- نموذج الإجراءات الجماعية مستقل عن الجدول لتفادي النماذج المتداخلة مع نموذج التعديل المضمن -->
     <form action="/admin/bulk_action" method="POST" id="bulkForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="d-flex gap-3 mb-3">
@@ -106,9 +107,10 @@
                 🗑️ حذف المحدد
             </button>
         </div>
+    </form>
 
         <div class="table-responsive dark-panel shadow-lg rounded-3 border-0">
-            <table class="table table-dark-custom align-middle mb-0">
+            <table class="table table-dark-custom align-middle mb-0" id="pendingTable">
                 <thead class="thead-gold">
                     <tr>
                         <th style="width: 5%; padding: 15px; text-align: center;">
@@ -128,7 +130,7 @@
                     {% for term in pending_terms %}
                     <tr class="term-row">
                         <td style="padding: 15px; text-align: center;">
-                            <input class="form-check-input term-checkbox" type="checkbox" name="term_ids" value="{{ term.id }}" style="cursor: pointer; transform: scale(1.2);">
+                            <input class="form-check-input term-checkbox" type="checkbox" name="term_ids" value="{{ term.id }}" form="bulkForm" style="cursor: pointer; transform: scale(1.2);">
                         </td>
                         <td class="gold-text fw-bold text-center">
                             {{ loop.index }}
@@ -151,11 +153,33 @@
                         <td style="text-align: center;">
                             <div class="d-flex gap-2 justify-content-center">
                                 {% if has_api_key %}
-                                <button type="submit" formaction="{{ url_for('process_ai', term_id=term.id) }}" class="btn btn-sm btn-info btn-custom" title="تحسين بالذكاء الاصطناعي (AI Refine)" onclick="return confirmAction('تحسين المصطلح واقتراح الترجمة بالذكاء الاصطناعي؟')">✨</button>
+                                <form method="POST" action="{{ url_for('process_ai', term_id=term.id) }}" style="display:inline;" onsubmit="return confirmAction('تحسين المصطلح واقتراح الترجمة بالذكاء الاصطناعي؟')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-info btn-custom" title="تحسين بالذكاء الاصطناعي (AI Refine)">✨</button>
+                                </form>
                                 {% endif %}
-                                <button type="submit" formaction="{{ url_for('approve_term', term_id=term.id) }}" class="btn btn-sm btn-success btn-custom" title="اعتماد" onclick="return confirmAction('اعتماد هذا المصطلح؟')">✅</button>
-                                <button type="submit" formaction="{{ url_for('delete_term', term_id=term.id) }}" class="btn btn-sm btn-danger btn-custom" title="حذف" onclick="return confirmAction('تأكيد الحذف؟')">🗑️</button>
+                                <form method="POST" action="{{ url_for('approve_term', term_id=term.id) }}" style="display:inline;" onsubmit="return confirmAction('اعتماد هذا المصطلح؟')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-success btn-custom" title="اعتماد">✅</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('delete_term', term_id=term.id) }}" style="display:inline;" onsubmit="return confirmAction('تأكيد الحذف؟')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-danger btn-custom" title="حذف">🗑️</button>
+                                </form>
                             </div>
+                            <details class="mt-2">
+                                <summary class="btn btn-sm btn-outline-warning">تعديل</summary>
+                                <form method="POST" action="{{ url_for('edit_term', term_id=term.id) }}" class="mt-2 p-2 bg-dark rounded">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input class="form-control mb-2" name="en" value="{{ term.en }}" required placeholder="English Term">
+                                    <input class="form-control mb-2" name="ar" value="{{ term.ar or '' }}" placeholder="المقابل العربي">
+                                    <input class="form-control mb-2" name="subject_field" value="{{ term.subject_field or '' }}" placeholder="المجال">
+                                    <textarea class="form-control mb-2" name="definition" placeholder="الشرح">{{ term.definition or '' }}</textarea>
+                                    <textarea class="form-control mb-2" name="source_text_en" dir="ltr" rows="2" placeholder="نص المصدر الإنجليزي (en Source text)">{{ term.source_text_en or '' }}</textarea>
+                                    <textarea class="form-control mb-2" name="source_text_ar" dir="rtl" rows="2" placeholder="نص المصدر العربي (ar Source text)">{{ term.source_text_ar or '' }}</textarea>
+                                    <button class="btn btn-sm btn-warning w-100" type="submit">حفظ التعديل</button>
+                                </form>
+                            </details>
                         </td>
                     </tr>
                     {% else %}
@@ -166,7 +190,6 @@
                 </tbody>
             </table>
         </div>
-    </form>
 </div>
 
 <!-- 📚 القاموس المحفوظ: المصطلحات المعتمدة -->

@@ -114,7 +114,7 @@ flowchart LR
 
 ### 4.1 `receive_terms()` — نقطة نهاية API الاستقبال
 
-**الموقع:** `app.py` السطور 120–184  
+**الموقع:** `app.py` السطور 177–266  
 **المسار:** `POST /api/receive-terms`
 
 ```python
@@ -122,22 +122,27 @@ flowchart LR
 @app.route('/api/receive-terms', methods=['POST'])
 @limiter.limit("60 per hour")
 def receive_terms():
-    # 1. التحقق من Bearer Token
+    # 1. التحقق من Bearer Token بمقارنة آمنة ذات وقت ثابت
     auth_header = request.headers.get('Authorization')
-    expected_token = f"Bearer {os.environ.get('INGEST_API_KEY')}"
-    if not auth_header or auth_header != expected_token:
+    ingest_key = os.environ.get('INGEST_API_KEY')
+    expected_token = f"Bearer {ingest_key}"
+    if not auth_header or not hmac.compare_digest(auth_header, expected_token):
         return jsonify({'error': 'Unauthorized'}), 401
 
-    terms = request.get_json().get('terms', [])
+    terms = request.get_json(silent=True).get('terms', [])
 
-    # 2. كشف التكرار الفوري قبل الإدراج
-    existing_rows = db.session.query(Term.en).all()
-    existing_keys = {_term_key(r[0]) for r in existing_rows if r[0]}
+    # 2. كشف التكرار الفوري قبل الإدراج (على الزوج الثنائي en|ar)
+    incoming_words = [str(item.get('en') or '').strip() for item in terms if item.get('en')]
+    matched_rows = Term.query.filter(Term.en.in_(incoming_words)).all() if incoming_words else []
+    existing_map = {_pair_key(r.en, r.ar): r for r in matched_rows if _pair_key(r.en, r.ar)}
+    existing_keys = set(existing_map.keys())
     seen_in_batch = set()
     added_count = skipped_count = 0
 
     for item in terms:
-        norm_key = _term_key(item.get('en', ''))
+        eng = str(item.get('en') or '').strip()
+        ara = str(item.get('ar') or '').strip()
+        norm_key = _pair_key(eng, ara)
         if not norm_key or norm_key in existing_keys or norm_key in seen_in_batch:
             skipped_count += 1; continue
 
@@ -145,11 +150,11 @@ def receive_terms():
         existing_keys.add(norm_key)
 
         new_term = Term(
-            en=item.get('en'), ar=item.get('ar'),
-            definition=item.get('definition'),
-            subject_field=item.get('subject field', 'قانون عام'),
-            source_text_en=item.get('source_text_en') or item.get('source text en'),
-            source_text_ar=item.get('source_text_ar') or item.get('source text ar'),
+            en=eng, ar=ara,
+            definition=str(item.get('definition') or '').strip(),
+            subject_field=str(item.get('subject field') or item.get('subject_field') or 'قانون عام').strip(),
+            source_text_en=str(item.get('source_text_en') or item.get('source text en') or '').strip(),
+            source_text_ar=str(item.get('source_text_ar') or item.get('source text ar') or '').strip(),
             status='pending'      # ← كل وارد يبدأ بالانتظار
         )
         db.session.add(new_term); added_count += 1
@@ -160,15 +165,15 @@ def receive_terms():
 ```
 
 **نقاط التصميم:**
-- **`@csrf.exempt`** مع **Bearer Token** بدلاً من كوكيز الجلسة — المسار يتلقى طلبات من تطبيق خارجي (Streamlit) لا من متصفح مستخدم، لذا CSRF غير ذي صلة والمصادقة بالرمز أنسب
-- **كشف التكرار الفوري** ثنائي المستوى: داخل الدُّفعة الواحدة (`seen_in_batch`) وعبر كل قاعدة البيانات (`existing_keys`)
-- **الإدراج الآمن من العمليات المتكررة (idempotent):** إعادة إرسال نفس الدُّفعة لا تُضيف نسخاً مكررة
+- **`@csrf.exempt`** مع **Bearer Token** (`hmac.compare_digest`) بدلاً من كوكيز الجلسة — المسار يتلقى طلبات من تطبيق خارجي (Streamlit) لا من متصفح مستخدم، لذا CSRF غير ذي صلة والمصادقة بالرمز أنسب
+- **كشف التكرار الفوري** ثنائي المستوى: داخل الدُّفعة الواحدة (`seen_in_batch`) وعبر قاعدة البيانات (`existing_keys`) باستخدام الزوج الثنائي `_pair_key(en, ar)`
+- **الإدراج الآمن من العمليات المتكررة (idempotent):** إعادة إرسال نفس الدُّفعة لا تُضيف نسخاً مكررة، مع تحديث المصطلحات المعلّقة عند تعديلها من المنصة
 
 ---
 
 ### 4.2 `deduplicate_terms()` — إزالة التكرار الحتمية ثلاثية المراحل
 
-**الموقع:** `app.py` السطور 430–465  
+**الموقع:** `app.py` السطور 576–609  
 **المسار:** `POST /admin/deduplicate`
 
 ```python
@@ -178,7 +183,7 @@ def deduplicate_terms():
     kept_keys = set()
     dup_approved = []
     for term in approved:
-        key = _term_key(term.en)
+        key = _pair_key(term.en, term.ar)
         if not key or key in kept_keys:
             dup_approved.append(term)   # مكرر — مُعلَّم للحذف
         else:
@@ -190,8 +195,8 @@ def deduplicate_terms():
                         .order_by(Term.id).all()
     dup_pending = []; seen_pending = set()
     for term in pending:
-        key = _term_key(term.en)
-        if key in kept_keys or key in seen_pending:
+        key = _pair_key(term.en, term.ar)
+        if not key or key in kept_keys or key in seen_pending:
             dup_pending.append(term)
         else:
             seen_pending.add(key)
@@ -207,16 +212,22 @@ def deduplicate_terms():
 
 ### 4.3 `_term_key()` — معيار التطبيع العالمي
 
-**الموقع:** `app.py` السطور 113–116
+**الموقع:** `app.py` السطور 141–152
 
 ```python
 def _term_key(value):
-    value = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    value = normalize_text(str(value or "")).casefold()
+    value = _strip_ar_diacritics(value)
+    value = re.sub(r"[أإآٱ]", "ا", value)
+    value = re.sub(r"ى(?=\s|$|\W)", "ي", value)
+    value = re.sub(r"ة(?=\s|$|\W)", "ه", value)
     value = re.sub(r"[\W_]+", " ", value, flags=re.UNICODE)
-    return re.sub(r"\s+", " ", value).strip()
+    words = value.split()
+    norm_words = [w[2:] if re.match(r"^ال[\u0600-\u06ff]{2,}", w) else w for w in words]
+    return " ".join(norm_words).strip()
 ```
 
-نفس الدالة الموجودة في Platform A بالضبط — يضمن ذلك **اتساق منطق كشف التكرار** عبر المنظومة كاملة. NFKC ضروري للعربية لتطبيع متغيرات التشكيل وأشكال الهمزة.
+نفس الدالة الموجودة في Platform A بالضبط — يضمن ذلك **اتساق منطق كشف التكرار** عبر المنظومة كاملة. NFKC وتوحيد المتغيرات الإملائية العربية وإزالة `ال` التعريف ضرورية لتطبيع متغيرات التشكيل وأشكال الهمزة.
 
 ---
 
@@ -265,7 +276,7 @@ def export_tbx():
 
 ### 4.5 `export_csv()` — تصدير CSV مع BOM للعربية
 
-**الموقع:** `app.py` السطور 484–514
+**الموقع:** `app.py` السطور 626–656
 
 ```python
 def export_csv():
@@ -276,13 +287,16 @@ def export_csv():
                      'Subject Field','Definition','Source Text EN',
                      'Source Text AR','Date Added'])
     for idx, term in enumerate(terms, start=1):
-        writer.writerow([idx, term.id, term.en, term.ar or '',
-                         term.subject_field or '', term.definition or '',
-                         term.source_text_en or '', term.source_text_ar or '',
+        writer.writerow([idx, term.id, sanitize_excel_cell(term.en),
+                         sanitize_excel_cell(term.ar or ''),
+                         sanitize_excel_cell(term.subject_field or ''),
+                         sanitize_excel_cell(term.definition or ''),
+                         sanitize_excel_cell(term.source_text_en or ''),
+                         sanitize_excel_cell(term.source_text_ar or ''),
                          term.date.strftime('%Y-%m-%d') if term.date else ''])
 
-    # BOM (\\ufeff) يضمن عرض العربية صحيحاً في Excel
-    data = '\ufeff' + output.getvalue()
+    # ترميز utf-8-sig يضمن إضافة BOM مرة واحدة فقط وعرض العربية صحيحاً في Excel
+    data = output.getvalue()
     return send_file(io.BytesIO(data.encode('utf-8-sig')),
                      mimetype='text/csv; charset=utf-8',
                      as_attachment=True,

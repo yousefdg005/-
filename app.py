@@ -127,10 +127,36 @@ def get_ai_config():
     model = model_setting.value if model_setting else 'openai/gpt-3.5-turbo'
     return api_key, model
 
+_INVISIBLE_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+_AR_DIACRITICS_RE = re.compile(r"[\u0640\u064b-\u065f\u0670\u06d6-\u06ed]")
+
+def normalize_text(text):
+    text = unicodedata.normalize("NFKC", str(text or ""))
+    text = _INVISIBLE_RE.sub("", text)
+    return text.replace("\u00a0", " ")
+
+def _strip_ar_diacritics(text):
+    return _AR_DIACRITICS_RE.sub("", str(text or ""))
+
 def _term_key(value):
-    value = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    value = normalize_text(str(value or "")).casefold()
+    # إزالة التشكيل والمد (التطويل) قبل استبدال غير الحروف بمسافات حتى لا تنقسم الكلمات العربية
+    value = _strip_ar_diacritics(value)
+    # توحيد المتغيرات الإملائية العربية الشائعة لمنع التكرار
+    value = re.sub(r"[أإآٱ]", "ا", value)
+    value = re.sub(r"ى(?=\s|$|\W)", "ي", value)
+    value = re.sub(r"ة(?=\s|$|\W)", "ه", value)
     value = re.sub(r"[\W_]+", " ", value, flags=re.UNICODE)
-    return re.sub(r"\s+", " ", value).strip()
+    words = value.split()
+    norm_words = [w[2:] if re.match(r"^ال[\u0600-\u06ff]{2,}", w) else w for w in words]
+    return " ".join(norm_words).strip()
+
+def _pair_key(en_val, ar_val=""):
+    en_k = _term_key(en_val)
+    ar_k = _term_key(ar_val)
+    if not en_k:
+        return ""
+    return f"{en_k}|{ar_k}" if ar_k else en_k
 
 def sanitize_excel_cell(value):
     """حماية ملفات Excel و CSV من ثغرة Formula Injection (CWE-1236)"""
@@ -177,7 +203,8 @@ def receive_terms():
         # فحص استباقي للمصطلحات الواردة بالدفعة فقط بدلاً من جلب كامل الجدول لتوفير الذاكرة
         incoming_words = [str(item.get('en') or '').strip() for item in terms if item.get('en')]
         matched_rows = Term.query.filter(Term.en.in_(incoming_words)).all() if incoming_words else []
-        existing_keys = {_term_key(r.en) for r in matched_rows}
+        existing_map = {_pair_key(r.en, r.ar): r for r in matched_rows if _pair_key(r.en, r.ar)}
+        existing_keys = set(existing_map.keys())
 
         seen_in_batch = set()
         added_count = 0
@@ -187,10 +214,30 @@ def receive_terms():
             eng = str(item.get('en') or '').strip()
             if not eng:
                 continue
+            ara = str(item.get('ar') or '').strip()
 
-            norm_key = _term_key(eng)
-            if not norm_key or norm_key in existing_keys or norm_key in seen_in_batch:
+            norm_key = _pair_key(eng, ara)
+            if not norm_key or norm_key in seen_in_batch:
                 skipped_count += 1
+                continue
+
+            if norm_key in existing_keys:
+                existing_term = existing_map.get(norm_key)
+                if existing_term and existing_term.status == 'pending':
+                    new_def = str(item.get('definition') or '').strip()
+                    new_subj = str(item.get('subject field') or item.get('subject_field') or '').strip()
+                    new_src_en = str(item.get('source_text_en') or item.get('source text en') or '').strip()
+                    new_src_ar = str(item.get('source_text_ar') or item.get('source text ar') or '').strip()
+                    if new_def:
+                        existing_term.definition = new_def
+                    if new_subj:
+                        existing_term.subject_field = new_subj
+                    if new_src_en:
+                        existing_term.source_text_en = new_src_en
+                    if new_src_ar:
+                        existing_term.source_text_ar = new_src_ar
+                skipped_count += 1
+                seen_in_batch.add(norm_key)
                 continue
 
             seen_in_batch.add(norm_key)
@@ -198,7 +245,7 @@ def receive_terms():
 
             new_term = Term(
                 en=eng,
-                ar=str(item.get('ar') or '').strip(),
+                ar=ara,
                 definition=str(item.get('definition') or '').strip(),
                 subject_field=str(item.get('subject field') or item.get('subject_field') or 'قانون عام').strip(),
                 source_text_en=str(item.get('source_text_en') or item.get('source text en') or '').strip(),
@@ -536,7 +583,7 @@ def deduplicate_terms():
     kept_keys = set()
     dup_approved = []
     for term in approved:
-        key = _term_key(term.en)
+        key = _pair_key(term.en, term.ar)
         if not key or key in kept_keys:
             dup_approved.append(term)
         else:
@@ -546,7 +593,7 @@ def deduplicate_terms():
     dup_pending = []
     seen_pending = set()
     for term in pending:
-        key = _term_key(term.en)
+        key = _pair_key(term.en, term.ar)
         if not key or key in kept_keys or key in seen_pending:
             dup_pending.append(term)
         else:
