@@ -19,51 +19,31 @@
 </div>
 {% endif %}
 
-<!-- ⚙️ إعدادات الذكاء الاصطناعي (Google AI Studio / OpenRouter) -->
+<!-- ⚙️ إعدادات OpenRouter ومفتاح API مع اختيار النموذج -->
 <div class="card mb-4 shadow-sm border-0 rounded-3">
-    <div class="card-header bg-dark text-white fw-bold d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <span>⚙️ إعدادات الذكاء الاصطناعي (Google AI Studio / OpenRouter)</span>
-        <span class="badge {{ 'bg-success' if has_api_key else 'bg-secondary' }}" style="font-size: 0.85rem;">
-            {{ '✅ متصل وجاهز (' ~ ('Google Gemini' if ai_provider == 'google' else 'OpenRouter') ~ ')' if has_api_key else '⚠️ لم يتم إدخال مفتاح API بعد' }}
-        </span>
+    <div class="card-header bg-dark text-white fw-bold d-flex align-items-center">
+        <span>⚙️ OpenRouter API & AI Model Settings</span>
     </div>
     <div class="card-body p-4">
         <form method="POST" action="{{ url_for('save_settings') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label fw-bold text-muted" for="aiProviderSelect">مزود الخدمة (AI Provider)</label>
-                    <select name="ai_provider" id="aiProviderSelect" class="form-select">
-                        <option value="google" {% if ai_provider == 'google' %}selected{% endif %}>Google AI Studio (Gemini) — مجاني وموصى به</option>
-                        <option value="openrouter" {% if ai_provider == 'openrouter' %}selected{% endif %}>OpenRouter — نماذج متعددة</option>
-                    </select>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold text-muted">OpenRouter API Key</label>
+                    <input type="password" name="openrouter_api_key" class="form-control" placeholder="{{ '🔑 المفتاح محفوظ — أدخل مفتاحاً جديداً لاستبداله' if has_api_key else 'sk-or-v1-xxxxxxxx...' }}">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-bold text-muted" id="apiKeyLabel" for="apiKeyInput">
-                        {{ 'مفتاح API الخاص بـ Google' if ai_provider == 'google' else 'مفتاح API الخاص بـ OpenRouter' }}
-                    </label>
-                    <input type="password" name="api_key" id="apiKeyInput" class="form-control"
-                           data-has-google="{{ '1' if has_google_key else '0' }}"
-                           data-has-openrouter="{{ '1' if has_openrouter_key else '0' }}"
-                           placeholder="{{ ('🔑 المفتاح محفوظ — أدخل مفتاحاً جديداً لاستبداله' if has_google_key else 'AIzaSy...') if ai_provider == 'google' else ('🔑 المفتاح محفوظ — أدخل مفتاحاً جديداً لاستبداله' if has_openrouter_key else 'sk-or-v1-xxxxxxxx...') }}">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-bold text-muted">اختيار النموذج</label>
-                    <select name="google_model" id="googleModelSelect" class="form-select" {% if ai_provider != 'google' %}style="display:none;"{% endif %}>
-                        <option value="gemini-2.5-flash" {% if google_model == 'gemini-2.5-flash' %}selected{% endif %}>Google Gemini 2.5 Flash (الأسرع والموصى به)</option>
-                        <option value="gemini-1.5-flash" {% if google_model == 'gemini-1.5-flash' %}selected{% endif %}>Google Gemini 1.5 Flash (سريع ومستقر)</option>
-                        <option value="gemini-2.5-pro" {% if google_model == 'gemini-2.5-pro' %}selected{% endif %}>Google Gemini 2.5 Pro (تحليل لغوي دقيق)</option>
-                    </select>
-                    <select name="openrouter_model" id="openrouterModelSelect" class="form-select" {% if ai_provider == 'google' %}style="display:none;"{% endif %}>
-                        <option value="openai/gpt-4o-mini" {% if openrouter_model == 'openai/gpt-4o-mini' %}selected{% endif %}>OpenAI GPT-4o Mini</option>
-                        <option value="openai/gpt-3.5-turbo" {% if openrouter_model == 'openai/gpt-3.5-turbo' %}selected{% endif %}>OpenAI GPT-3.5 Turbo</option>
-                        <option value="google/gemini-flash-1.5" {% if openrouter_model == 'google/gemini-flash-1.5' %}selected{% endif %}>Google Gemini Flash 1.5</option>
-                        <option value="meta-llama/llama-3.1-8b-instruct" {% if openrouter_model == 'meta-llama/llama-3.1-8b-instruct' %}selected{% endif %}>Meta Llama 3.1 8B Instruct</option>
-                        <option value="anthropic/claude-3-haiku" {% if openrouter_model == 'anthropic/claude-3-haiku' %}selected{% endif %}>Anthropic Claude 3 Haiku</option>
+                    <label class="form-label fw-bold text-muted">Select AI Model</label>
+                    <select name="openrouter_model" class="form-select">
+                        <option value="openai/gpt-3.5-turbo" {% if current_model == 'openai/gpt-3.5-turbo' %}selected{% endif %}>OpenAI GPT-3.5 Turbo</option>
+                        <option value="openai/gpt-4o-mini" {% if current_model == 'openai/gpt-4o-mini' %}selected{% endif %}>OpenAI GPT-4o Mini</option>
+                        <option value="meta-llama/llama-3.1-8b-instruct" {% if current_model == 'meta-llama/llama-3.1-8b-instruct' %}selected{% endif %}>Meta Llama 3.1 8B Instruct</option>
+                        <option value="google/gemini-flash-1.5" {% if current_model == 'google/gemini-flash-1.5' %}selected{% endif %}>Google Gemini Flash 1.5</option>
+                        <option value="anthropic/claude-3-haiku" {% if current_model == 'anthropic/claude-3-haiku' %}selected{% endif %}>Anthropic Claude 3 Haiku</option>
                     </select>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100 btn-custom fw-bold">حفظ الإعدادات</button>
+                    <button type="submit" class="btn btn-primary w-100 btn-custom fw-bold">Save Settings</button>
                 </div>
             </div>
         </form>
@@ -330,30 +310,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 hiddenInput.value = box.value;
                 bulkForm.appendChild(hiddenInput);
             });
-        });
-    }
-
-    const providerSelect = document.getElementById('aiProviderSelect');
-    const apiKeyLabel = document.getElementById('apiKeyLabel');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    const googleModelSelect = document.getElementById('googleModelSelect');
-    const openrouterModelSelect = document.getElementById('openrouterModelSelect');
-
-    if (providerSelect && apiKeyLabel && apiKeyInput && googleModelSelect && openrouterModelSelect) {
-        providerSelect.addEventListener('change', function () {
-            const isGoogle = providerSelect.value === 'google';
-            apiKeyLabel.textContent = isGoogle ? 'مفتاح API الخاص بـ Google' : 'مفتاح API الخاص بـ OpenRouter';
-            const hasGoogle = apiKeyInput.getAttribute('data-has-google') === '1';
-            const hasOpenRouter = apiKeyInput.getAttribute('data-has-openrouter') === '1';
-            if (isGoogle) {
-                apiKeyInput.placeholder = hasGoogle ? '🔑 المفتاح محفوظ — أدخل مفتاحاً جديداً لاستبداله' : 'AIzaSy...';
-                googleModelSelect.style.display = '';
-                openrouterModelSelect.style.display = 'none';
-            } else {
-                apiKeyInput.placeholder = hasOpenRouter ? '🔑 المفتاح محفوظ — أدخل مفتاحاً جديداً لاستبداله' : 'sk-or-v1-xxxxxxxx...';
-                googleModelSelect.style.display = 'none';
-                openrouterModelSelect.style.display = '';
-            }
         });
     }
 });
