@@ -120,12 +120,41 @@ with app.app_context():
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+def _get_setting(key, default=''):
+    s = Setting.query.filter_by(key=key).first()
+    return s.value if s and s.value else default
+
+def _set_setting(key, value):
+    s = Setting.query.filter_by(key=key).first()
+    if not s:
+        db.session.add(Setting(key=key, value=value))
+    else:
+        s.value = value
+
 def get_ai_config():
-    api_key_setting = Setting.query.filter_by(key='openrouter_api_key').first()
-    model_setting = Setting.query.filter_by(key='openrouter_model').first()
-    api_key = api_key_setting.value if api_key_setting else os.getenv('OPENROUTER_API_KEY', '')
-    model = model_setting.value if model_setting else 'openai/gpt-3.5-turbo'
-    return api_key, model
+    provider = _get_setting('ai_provider', 'google')
+    if provider not in ('google', 'openrouter'):
+        provider = 'google'
+
+    google_key = _get_setting('google_api_key', '') or os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY') or ''
+    google_model = _get_setting('google_model', 'gemini-2.5-flash')
+
+    or_key = _get_setting('openrouter_api_key', '') or os.getenv('OPENROUTER_API_KEY', '')
+    or_model = _get_setting('openrouter_model', 'openai/gpt-4o-mini')
+
+    active_key = google_key if provider == 'google' else or_key
+    active_model = google_model if provider == 'google' else or_model
+
+    return {
+        'provider': provider,
+        'api_key': active_key,
+        'model': active_model,
+        'has_api_key': bool(active_key),
+        'has_google_key': bool(google_key),
+        'has_openrouter_key': bool(or_key),
+        'google_model': google_model,
+        'openrouter_model': or_model,
+    }
 
 _INVISIBLE_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
 _AR_DIACRITICS_RE = re.compile(r"[\u0640\u064b-\u065f\u0670\u06d6-\u06ed]")
@@ -399,39 +428,46 @@ def admin():
     approved_terms = Term.query.filter_by(status='approved').order_by(Term.en).all()
     new_incoming_count = Term.query.filter_by(status='pending').count()
     
-    api_key, current_model = get_ai_config()
+    ai_cfg = get_ai_config()
     
     return render_template('admin.html', 
                            pending_terms=pending_terms, 
                            approved_terms=approved_terms,
                            new_incoming_count=new_incoming_count,
-                           has_api_key=bool(api_key),
-                           current_model=current_model)
+                           has_api_key=ai_cfg['has_api_key'],
+                           current_model=ai_cfg['model'],
+                           ai_provider=ai_cfg['provider'],
+                           has_google_key=ai_cfg['has_google_key'],
+                           has_openrouter_key=ai_cfg['has_openrouter_key'],
+                           google_model=ai_cfg['google_model'],
+                           openrouter_model=ai_cfg['openrouter_model'])
 
 @app.route('/admin/save_settings', methods=['POST'])
 @login_required
 def save_settings():
     if current_user.role != 'admin': return "Access Denied", 403
     
-    api_key = request.form.get('openrouter_api_key', '').strip()
-    selected_model = request.form.get('openrouter_model', 'openai/gpt-3.5-turbo')
-    
-    if api_key:
-        key_setting = Setting.query.filter_by(key='openrouter_api_key').first()
-        if not key_setting:
-            db.session.add(Setting(key='openrouter_api_key', value=api_key))
-        else:
-            key_setting.value = api_key
-        
-    model_setting = Setting.query.filter_by(key='openrouter_model').first()
-    if not model_setting:
-        model_setting = Setting(key='openrouter_model', value=selected_model)
-        db.session.add(model_setting)
+    provider = request.form.get('ai_provider', 'google').strip()
+    if provider not in ('google', 'openrouter'):
+        provider = 'google'
+    _set_setting('ai_provider', provider)
+
+    api_key = request.form.get('api_key', '').strip()
+    if provider == 'google':
+        selected_model = request.form.get('google_model', 'gemini-2.5-flash').strip()
+        _set_setting('google_model', selected_model)
+        if api_key:
+            _set_setting('google_api_key', api_key)
+        provider_label = "Google AI Studio (Gemini)"
     else:
-        model_setting.value = selected_model
+        selected_model = request.form.get('openrouter_model', 'openai/gpt-4o-mini').strip()
+        _set_setting('openrouter_model', selected_model)
+        if api_key:
+            _set_setting('openrouter_api_key', api_key)
+        provider_label = "OpenRouter"
         
     db.session.commit()
-    flash('تم حفظ إعدادات OpenRouter ونموذج الذكاء الاصطناعي بنجاح!', 'success')
+    flash(f'تم حفظ إعدادات {provider_label} والنموذج [{selected_model}] بنجاح!', 'success')
     return redirect(url_for('admin'))
 
 @app.route('/admin/process_ai/<int:term_id>', methods=['POST'])
@@ -441,18 +477,16 @@ def process_ai(term_id):
         return "Access Denied", 403
         
     term = Term.query.get_or_404(term_id)
-    api_key, model = get_ai_config()
+    ai_cfg = get_ai_config()
+    provider = ai_cfg['provider']
+    api_key = ai_cfg['api_key']
+    model = ai_cfg['model']
+
     if not api_key:
-        flash('يرجى ضبط مفتاح OpenRouter في إعدادات الذكاء الاصطناعي أولاً.', 'danger')
+        provider_name = "Google AI Studio" if provider == 'google' else "OpenRouter"
+        flash(f'يرجى إدخال وحفظ مفتاح API الخاص بـ {provider_name} في إعدادات الذكاء الاصطناعي أولاً.', 'danger')
         return redirect(url_for('admin'))
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://lexterm.legal",
-        "X-Title": "LexTerm Legal Dictionary"
-    }
-    
     prompt = (
         f"أنت خبير في المصطلحات والترجمة القانونية. حلل المصطلح التالي:\n"
         f"المصطلح الإنجليزي: '{term.en}'\n"
@@ -463,19 +497,44 @@ def process_ai(term_id):
         f'{{"ar": "أدق مقابل قانوني عربي", "definition": "شرح قانوني موجز ومحدد", "subject_field": "الفرع القانوني الدقيق مثل قانون جنائي، تجاري، مدني..."}}'
     )
     
-    data = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2
-    }
-    
     try:
-        res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data, timeout=25)
-        if res.status_code != 200:
-            flash(f'فشل الاتصال بـ OpenRouter (رمز الخطأ: {res.status_code})', 'danger')
-            return redirect(url_for('admin'))
-            
-        raw_content = res.json()['choices'][0]['message']['content'].strip()
+        if provider == 'google':
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "responseMimeType": "application/json"
+                }
+            }
+            res = requests.post(url, headers={"Content-Type": "application/json"}, json=payload, timeout=25)
+            if res.status_code != 200:
+                err_msg = ""
+                try:
+                    err_msg = res.json().get('error', {}).get('message', '')
+                except Exception:
+                    pass
+                flash(f'فشل الاتصال بـ Google AI Studio (رمز {res.status_code}): {err_msg}', 'danger')
+                return redirect(url_for('admin'))
+            raw_content = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        else:
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://lexterm.legal",
+                "X-Title": "LexTerm Legal Dictionary"
+            }
+            data = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.2
+            }
+            res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data, timeout=25)
+            if res.status_code != 200:
+                flash(f'فشل الاتصال بـ OpenRouter (رمز الخطأ: {res.status_code})', 'danger')
+                return redirect(url_for('admin'))
+            raw_content = res.json()['choices'][0]['message']['content'].strip()
+
         if raw_content.startswith('```'):
             raw_content = re.sub(r'^```(?:json)?\s*', '', raw_content)
             raw_content = re.sub(r'\s*```$', '', raw_content)
@@ -490,7 +549,7 @@ def process_ai(term_id):
             
         term.status = 'ai_suggested'
         db.session.commit()
-        flash(f'تم تحسين المصطلح "{term.en}" بنجاح بواسطة الذكاء الاصطناعي [{model}].', 'success')
+        flash(f'تم تحسين المصطلح "{term.en}" بنجاح عبر {("Google Gemini" if provider == "google" else "OpenRouter")} [{model}].', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'حدث خطأ أثناء معالجة الذكاء الاصطناعي: {str(e)}', 'danger')
